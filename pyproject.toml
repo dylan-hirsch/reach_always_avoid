@@ -1,0 +1,16 @@
+[project]
+name = "reach-always-avoid"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "hj-reachability>=0.7.0",
+    "jax>=0.9.2",
+    "marimo>=0.21.1",
+    "matplotlib>=3.10.8",
+    "numpy>=2.4.3",
+    "ruff>=0.15.8",
+    "scipy>=1.17.1",
+    "tqdm>=4.67.3",
+]
