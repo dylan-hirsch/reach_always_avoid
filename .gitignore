@@ -1,0 +1,27 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Common files to ignore
+.ipynb_checkpoints/
+__pycache__/
+__marimo__/
+.DS_Store
+*.asv
+data/
+figures/
+*.pkl
+scratch/
+
+# Virtual environments
+.venv
+
+# Images
+*.png
+*.pdf
+*.svg
+*.jpeg
