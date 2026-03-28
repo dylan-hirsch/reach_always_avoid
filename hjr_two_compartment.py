@@ -23,9 +23,9 @@ def _():
 
     plt.rcParams["text.usetex"] = False
     plt.rcParams["mathtext.fontset"] = "cm"
-    font = {"size": 20}
+    font = {"size": 12}
     plt.rc("font", **font)
-    return closed_loop, hj, jnp, np, plt, two_compartment_model
+    return closed_loop, hj, jnp, mo, np, plt, two_compartment_model
 
 
 @app.cell
@@ -33,16 +33,19 @@ def _(hj, jnp, np, two_compartment_model):
     # This is where all of the work of HJR happens, namely computing the value function V
 
     # specify the dynamics we are considering
+
     model = two_compartment_model.two_compartment_model()
 
     # specify the time horizon of the problem
     T = 10
 
+    # specify the discounting factor
+    gamma = 0.90
+
     # specify the number of voxels to divide the spatial and temporal axes
-    x_voxels = 100
-    y_voxels = 100
-    theta_voxels = 100
-    t_voxels = 200
+    x_voxels = 250
+    y_voxels = 250
+    t_voxels = 500
 
     # Specify bounds
     x_min = -10
@@ -50,6 +53,11 @@ def _(hj, jnp, np, two_compartment_model):
 
     x_max = +10
     y_max = +10
+
+    # Specify therapeutic and toxic thresholds
+    l_x = 0.5
+    g_x = 2.0
+    g_y = 0.5
 
     # discretize state-space and the time to solve the HJ Partial Differential Equation
     # don't change
@@ -61,111 +69,335 @@ def _(hj, jnp, np, two_compartment_model):
     times = np.linspace(0.0, -T, t_voxels + 1)
 
     # specify the goal
-    l = (
-        np.sqrt(
-            (grid.states[..., 0] - 1.0) ** 2 + (grid.states[..., 1] - 1.0) ** 2
-        )
-        - 0.5
-    )
+    l = l_x - grid.states[..., 0]
 
-    g = -(
-        np.sqrt(
-            (grid.states[..., 0] - 1.0) ** 2 + (grid.states[..., 1] - 0.0) ** 2
-        )
-        + 0.5
-    )
+    g = jnp.maximum(grid.states[..., 0] - g_x, grid.states[..., 1] - g_y)
+    return T, g, g_x, g_y, gamma, grid, l, l_x, model, times
 
 
-    # specify the reach-avoid problem
-    def value_postprocessor(t, v, l, g):
-        return jnp.maximum(jnp.minimum(v, l), g)
-
-
-    # specify the accuracy with which to solve the HJ Partial Differential Equation
-    solver_settings = hj.SolverSettings.with_accuracy(
-        "very_high",
-        value_postprocessor=lambda t, v: value_postprocessor(t, v, l, g),
-    )
-
-    # solve for the value function
-    V = hj.solve(solver_settings, model, grid, times, l)
-    return T, V, grid, l, model, times
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## First, solve a normal RA problem
+    """)
+    return
 
 
 @app.cell
-def _(V, closed_loop, grid, model, times):
+def _(T, g, gamma, grid, hj, jnp, l, model, np, times):
+    def _():
+
+        # specify the reach-avoid problem
+        def value_postprocessor(t, v, l, g):
+            return jnp.maximum(jnp.minimum(v, gamma ** (t + T) * l), g)
+
+        # specify the accuracy with which to solve the HJ Partial Differential Equation
+        solver_settings = hj.SolverSettings.with_accuracy(
+            "very_high",
+            value_postprocessor=lambda t, v: value_postprocessor(t, v, l, g),
+        )
+
+        # solve for the value function
+        V = hj.solve(
+            solver_settings, model, grid, times, np.maximum(gamma**T * l, g)
+        )
+
+        return V
+
+
+    VRA = _()
+    return (VRA,)
+
+
+@app.cell
+def _(VRA, closed_loop, grid, model, times):
     # Form the closed-loop trajectory
 
-    cl = closed_loop.ClosedLoopTrajectory(
-        model, grid, times, V, initial_state=[0.0] * 2, steps=100
+    clRA = closed_loop.ClosedLoopTrajectory(
+        model, grid, times, VRA, initial_state=[0.0] * 2, steps=100
     )
-    return (cl,)
+    return (clRA,)
 
 
 @app.cell
-def _(T, cl, l, np, plt):
+def _(T, clRA, g_x, g_y, l_x, np, plt):
     # This is all just plotting
 
-    fig, axs = plt.subplots(1, 4, figsize=(20, 6))
 
-    ts = np.linspace(-T, 0, 1000)
+    def _(cl):
 
-    ax = axs[0]
-    labels = [r"$x$", r"$y$", r"$\theta$"]
-    for i in range(2):
-        ax.plot(ts, [cl.x(t)[i] for t in ts], label=labels[i])
-    ax.set_ylim([-10.1, 10.1])
-    ax.set_xlim([-T, 0.1])
-    ax.set_xlabel(r"$t$")
-    ax.set_ylabel(r"$\mathbf{x}(t)$")
-    ax.legend()
-    ax.set_title("State Trajectory")
+        fig, axs = plt.subplots(2, 2, figsize=(8.5, 8.5))
 
-    ax = axs[1]
-    ax.plot(ts, [cl.u(t) for t in ts], label=r"$\omega$")
-    ax.set_xlabel(r"$t$")
-    ax.set_ylabel(r"$u^*(t)$")
-    ax.set_xlim([-T, 0.1])
-    ax.set_title("Optimal Control")
-    ax.legend()
+        ts = np.linspace(-T, 0, 1000)
 
-    ax = axs[2]
-    ax.plot(ts, [cl.value(t) for t in ts])
-    ax.set_xlabel(r"$t$")
-    ax.set_ylabel(r"$V(\mathbf{x}(t), t)$")
-    ax.set_ylim([np.min(l) - 0.1, 1.0])
-    ax.axhline([0.0], color="black", linestyle="--")
-    ax.set_xlim([-T, 0.1])
-    ax.set_title("Value")
+        ax = axs[0,0]
+        labels = [r"$[\text{Drug}]_{\text{Blood}}$", r"$[\text{Drug}]_{\text{Kidneys}}$", r"$\theta$"]
+        ax.plot(ts + T, [cl.x(t)[0] for t in ts], label=labels[0], color = 'red')
+        ax.set_ylim([-0.1, 2.1])
+        ax.set_xlim([0, T + 0.1])
+        ax.set_xlabel(r"$t$")
+        ax.set_ylabel(r"$\mathbf{x}_1(t)$")
+        ax.set_title("Blood Compartment")
 
-    ax = axs[3]
-    ax.plot(
-        [cl.x(t)[0] for t in ts],
-        [cl.x(t)[1] for t in ts],
-        label="trajectory",
+        ax.axhline(y=g_x, linestyle="--", color="black", label = "Toxic Thresh.")
+        ax.axhline(y=l_x, linestyle="--", color="green", label = "Therapeutic Thresh.")
+
+        ax.legend()
+
+        ax = axs[1,0]
+        ax.plot(ts + T, [cl.x(t)[1] for t in ts], label=labels[1], color = 'Brown')
+        ax.set_ylim([-0.1, 2.1])
+        ax.set_xlim([0, T + 0.1])
+        ax.set_xlabel(r"$t$")
+        ax.set_ylabel(r"$\mathbf{x}_2(t)$")
+        ax.set_title("Kidney Compartment")
+
+        ax.axhline(y=g_y, linestyle="--", color="black", label = "Toxic Thresh.")
+        ax.legend()
+
+        ax = axs[0,1]
+        ax.plot(ts + T, [cl.u(t) for t in ts], label=r"$\text{Dosing Rate}$")
+        ax.set_xlabel(r"$t$")
+        ax.set_ylabel(r"$\mathbf{u}^*(t)$")
+        ax.set_xlim([0, T+ 0.1])
+        ax.set_title("Optimal Dosing Rate")
+        ax.legend()
+
+        ax = axs[1,1]
+        ax.plot(ts + T, [cl.d(t) for t in ts], label=r"$\text{Clearance Rate}$")
+        ax.set_xlabel(r"$t$")
+        ax.set_ylabel(r"$\mathbf{d}^*(t)$")
+        ax.set_xlim([0, T+ 0.1])
+        ax.set_title("Worst Case Clearance")
+        ax.legend()
+
+        plt.tight_layout()
+
+        plt.savefig("/Users/dylanhirsch/Desktop/RA.png")
+        plt.show()
+
+
+
+    _(clRA)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Next, solve just the A problem
+    """)
+    return
+
+
+@app.cell
+def _(T, g, gamma, grid, hj, jnp, l, model, times):
+    def _():
+
+        # specify the reach-avoid problem
+        def value_postprocessor(t, v, l, g):
+            return jnp.maximum(v, g)
+
+        # specify the accuracy with which to solve the HJ Partial Differential Equation
+        solver_settings = hj.SolverSettings.with_accuracy(
+            "very_high",
+            value_postprocessor=lambda t, v: value_postprocessor(
+                t, v, gamma ** (t + T) * l, g
+            ),
+        )
+
+        # solve for the value function
+        V = hj.solve(solver_settings, model, grid, times, g)
+
+        return V
+
+
+    VA = _()
+    return (VA,)
+
+
+@app.cell
+def _(VA, closed_loop, grid, model, times):
+    # Form the closed-loop trajectory
+
+    clA = closed_loop.ClosedLoopTrajectory(
+        model, grid, times, VA, initial_state=[0.0] * 2, steps=100
     )
-    ax.set_ylim([-10.1, 10.1])
-    ax.set_xlim([-10.1, 10.1])
-    ax.set_xlabel(r"$x$")
-    ax.set_ylabel(r"$y$")
+    return (clA,)
 
-    phis = np.linspace(0, 2 * np.pi, 101)
-    ax.plot(
-        [1 + 0.5 * np.cos(phi) for phi in phis],
-        [1 + 0.5 * np.sin(phi) for phi in phis],
-        label="target",
-    )
-    ax.plot(
-        [1 + 0.5 * np.cos(phi) for phi in phis],
-        [0 + 0.5 * np.sin(phi) for phi in phis],
-        label="obstacle",
-    )
-    ax.scatter([0], [0], color="red", label="start")
-    ax.legend()
-    ax.set_title("Phase Plane (x-y)")
 
-    plt.tight_layout()
-    plt.show()
+@app.cell
+def _(T, clA, g_x, g_y, l_x, np, plt):
+    # This is all just plotting
+
+
+    def _(cl):
+
+        fig, axs = plt.subplots(2, 2, figsize=(8.5, 8.5))
+
+        ts = np.linspace(-T, 0, 1000)
+
+        ax = axs[0,0]
+        labels = [r"$[\text{Drug}]_{\text{Blood}}$", r"$[\text{Drug}]_{\text{Kidneys}}$", r"$\theta$"]
+        ax.plot(ts + T, [cl.x(t)[0] for t in ts], label=labels[0], color = 'red')
+        ax.set_ylim([-0.1, 2.1])
+        ax.set_xlim([0, T + 0.1])
+        ax.set_xlabel(r"$t$")
+        ax.set_ylabel(r"$\mathbf{x}_1(t)$")
+        ax.set_title("Blood Compartment")
+
+        ax.axhline(y=g_x, linestyle="--", color="black", label = "Toxic Thresh.")
+        ax.axhline(y=l_x, linestyle="--", color="green", label = "Therapeutic Thresh.")
+
+        ax.legend()
+
+        ax = axs[1,0]
+        ax.plot(ts + T, [cl.x(t)[1] for t in ts], label=labels[1], color = 'Brown')
+        ax.set_ylim([-0.1, 2.1])
+        ax.set_xlim([0, T + 0.1])
+        ax.set_xlabel(r"$t$")
+        ax.set_ylabel(r"$\mathbf{x}_2(t)$")
+        ax.set_title("Kidney Compartment")
+
+        ax.axhline(y=g_y, linestyle="--", color="black", label = "Toxic Thresh.")
+        ax.legend()
+
+        ax = axs[0,1]
+        ax.plot(ts + T, [cl.u(t) for t in ts], label=r"$\text{Dosing Rate}$")
+        ax.set_xlabel(r"$t$")
+        ax.set_ylabel(r"$\mathbf{u}^*(t)$")
+        ax.set_xlim([0, T+ 0.1])
+        ax.set_title("Optimal Dosing Rate")
+        ax.legend()
+
+        ax = axs[1,1]
+        ax.plot(ts + T, [cl.d(t) for t in ts], label=r"$\text{Clearance Rate}$")
+        ax.set_xlabel(r"$t$")
+        ax.set_ylabel(r"$\mathbf{d}^*(t)$")
+        ax.set_xlim([0, T+ 0.1])
+        ax.set_title("Worst Case Clearance")
+        ax.legend()
+
+        plt.tight_layout()
+
+        plt.show()
+
+
+
+    _(clA)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Finally, solve the RAA
+    """)
+    return
+
+
+@app.cell
+def _(T, VA, g, gamma, grid, hj, jnp, l, model, np, times):
+    def _(VA):
+
+        # specify the reach-avoid problem
+        def value_postprocessor(t, v, l, g, times, VA):
+            i = jnp.argmin(jnp.abs(t - times))
+            return jnp.maximum(jnp.minimum(v, jnp.maximum(l, VA[i, ...])), g)
+
+        # specify the accuracy with which to solve the HJ Partial Differential Equation
+        solver_settings = hj.SolverSettings.with_accuracy(
+            "very_high",
+            value_postprocessor=lambda t, v: value_postprocessor(
+                t, v, gamma ** (t + T) * l, g, times, VA
+            ),
+        )
+
+        # solve for the value function
+        V = hj.solve(
+            solver_settings,
+            model,
+            grid,
+            times,
+            np.maximum.reduce([gamma**T * l, VA[0, ...], g]),
+        )
+
+        return V
+
+
+    VRAA = _(VA)
+    return (VRAA,)
+
+
+@app.cell
+def _(VA, VRAA, closed_loop, gamma, grid, l, model, times):
+    # Form the closed-loop trajectory
+
+    clRAA = closed_loop.ClosedLoopTrajectoryRAA(
+        model, grid, times, VRAA, VA, l, gamma, initial_state=[0.0] * 2, steps=100
+    )
+    return (clRAA,)
+
+
+@app.cell
+def _(T, clRAA, g_x, g_y, l_x, np, plt):
+    # This is all just plotting
+
+
+    def _(cl):
+
+        fig, axs = plt.subplots(2, 2, figsize=(8.5, 8.5))
+
+        ts = np.linspace(-T, 0, 1000)
+
+        ax = axs[0,0]
+        labels = [r"$[\text{Drug}]_{\text{Blood}}$", r"$[\text{Drug}]_{\text{Kidneys}}$", r"$\theta$"]
+        ax.plot(ts + T, [cl.x(t)[0] for t in ts], label=labels[0], color = 'red')
+        ax.set_ylim([-0.1, 2.1])
+        ax.set_xlim([0, T + 0.1])
+        ax.set_xlabel(r"$t$")
+        ax.set_ylabel(r"$\mathbf{x}_1(t)$")
+        ax.set_title("Blood Compartment")
+
+        ax.axhline(y=g_x, linestyle="--", color="black", label = "Toxic Thresh.")
+        ax.axhline(y=l_x, linestyle="--", color="green", label = "Therapeutic Thresh.")
+
+        ax.legend()
+
+        ax = axs[1,0]
+        ax.plot(ts + T, [cl.x(t)[1] for t in ts], label=labels[1], color = 'Brown')
+        ax.set_ylim([-0.1, 2.1])
+        ax.set_xlim([0, T + 0.1])
+        ax.set_xlabel(r"$t$")
+        ax.set_ylabel(r"$\mathbf{x}_2(t)$")
+        ax.set_title("Kidney Compartment")
+
+        ax.axhline(y=g_y, linestyle="--", color="black", label = "Toxic Thresh.")
+        ax.legend()
+
+        ax = axs[0,1]
+        ax.plot(ts + T, [cl.u(t) for t in ts], label=r"$\text{Dosing Rate}$")
+        ax.set_xlabel(r"$t$")
+        ax.set_ylabel(r"$\mathbf{u}^*(t)$")
+        ax.set_xlim([0, T+ 0.1])
+        ax.set_title("Optimal Dosing Rate")
+        ax.legend()
+
+        ax = axs[1,1]
+        ax.plot(ts + T, [cl.d(t) for t in ts], label=r"$\text{Clearance Rate}$")
+        ax.set_xlabel(r"$t$")
+        ax.set_ylabel(r"$\mathbf{d}^*(t)$")
+        ax.set_xlim([0, T+ 0.1])
+        ax.set_title("Worst Case Clearance")
+        ax.legend()
+
+        plt.tight_layout()
+
+        plt.savefig("/Users/dylanhirsch/Desktop/RAA.png")
+        plt.show()
+
+
+    _(clRAA)
     return
 
 
