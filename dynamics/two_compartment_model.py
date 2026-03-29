@@ -11,11 +11,15 @@ class two_compartment_model(dynamics.ControlAndDisturbanceAffineDynamics):
         uMin=0.0,
         dMax=1.2,
         dMin=0.8,
+        S1=-8,
+        S2=-6,
     ):
         self.uMax = uMax
         self.uMin = uMin
         self.dMax = dMax
         self.dMin = dMin
+        self.S1 = S1
+        self.S2 = S2
 
         control_space = sets.Box(jnp.array([self.uMin]), jnp.array([self.uMax]))
         disturbance_space = sets.Box(jnp.array([self.dMin]), jnp.array([self.dMax]))
@@ -34,7 +38,11 @@ class two_compartment_model(dynamics.ControlAndDisturbanceAffineDynamics):
 
     def control_jacobian(self, state, time):
 
-        g = jnp.array([[1.0], [0.0]])
+        multiplier = jnp.minimum(
+            jnp.maximum(1.0 - (time - self.S1) / (self.S2 - self.S1), 0.0), 1.0
+        )
+
+        g = jnp.array([[multiplier], [0.0]])
 
         return g.reshape([2, 1])
 
