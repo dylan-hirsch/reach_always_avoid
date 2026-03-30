@@ -16,6 +16,8 @@ data/
 figures/
 *.pkl
 scratch/
+.conda-env/
+.conda-pkgs/
 
 # Virtual environments
 .venv

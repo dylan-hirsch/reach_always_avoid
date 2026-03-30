@@ -85,7 +85,9 @@ def _(hj, np, three_compartment_model):
 
 
 @app.cell
-def _(T, W_end, W_start, g_z, l_x, linewidth, np, plt):
+def _(T, W_end, W_start, g_z, l_x, np, plt):
+    linewidth = 2
+
     def plot(cl):
         # This is all just plotting
 
@@ -522,7 +524,7 @@ def _():
 
     plt.tight_layout()
 
-    plt.savefig("/Users/dylanhirsch/Desktop/raa.pdf")
+    plt.savefig("raa.pdf")
     plt.show()
     """
     return
@@ -635,7 +637,7 @@ def _(T, W_end, W_start, clRA, clRA_cons, g_z, l_x, np, plt):
     
         style_ax(ax, r"$\mathbf{d}^*(\tau)$", "Worst-Case Unmodeled Dynamics", ylim=(-0.1, 2.1))
         ax.legend(fontsize=LEGEND_FONT, loc="upper left", facecolor="white", framealpha=1)
-        plt.savefig("/Users/dylanhirsch/Desktop/ra.pdf", bbox_inches="tight")
+        plt.savefig("ra.pdf", bbox_inches="tight")
 
     _()
     plt.show()
@@ -742,7 +744,7 @@ def _(T, W_end, W_start, clRAA, g_z, l_x, np, plt):
     
         style_ax(ax, r"$\mathbf{d}^*(\tau)$", "Worst-Case Unmodeled Dynamics", ylim=(-0.1, 2.1))
         ax.legend(fontsize=LEGEND_FONT, loc="upper left", facecolor="white", framealpha=1)
-        plt.savefig("/Users/dylanhirsch/Desktop/raa.pdf", bbox_inches="tight")
+        plt.savefig("raa.pdf", bbox_inches="tight")
 
     _()
     plt.show()

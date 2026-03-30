@@ -1,0 +1,8 @@
+name: reach-always-avoid
+channels:
+  - conda-forge
+dependencies:
+  - python=3.13
+  - pip
+  - pip:
+      - -r conda-requirements-lock.txt
