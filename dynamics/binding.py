@@ -15,7 +15,8 @@ class binding_model(dynamics.ControlAndDisturbanceAffineDynamics):
         dC=0.0, # 0. would allow disturbance to decrease
         kf=1.,
         kr=0.5,
-        gamma=0.5,
+        gammaX=0.5,
+        gammaY=0.5,
         gammaXY=0.2,
     ):
         self.uMax = uMax
@@ -27,7 +28,9 @@ class binding_model(dynamics.ControlAndDisturbanceAffineDynamics):
 
         self.kf = kf
         self.kr = kr
-        self.gamma = gamma
+        self.gammaX = gammaX
+        self.gammaY = gammaY
+
         self.gammaXY = gammaXY
 
         control_space = sets.Box(jnp.array([self.uMin, self.uMin]), jnp.array([self.uMax, self.uMax]))
@@ -41,8 +44,8 @@ class binding_model(dynamics.ControlAndDisturbanceAffineDynamics):
 
         x, y, z = state
 
-        f = jnp.array([[-self.kf * x * y + self.kr * z - self.gamma * x], 
-                       [-self.kf * x * y + self.kr * z - self.gamma * y], 
+        f = jnp.array([[-self.kf * x * y + self.kr * z - self.gammaX * x], 
+                       [-self.kf * x * y + self.kr * z - self.gammaY * y], 
                        [self.kf * x * y - self.kr * z - self.gammaXY * z]])
 
         return f.reshape([3])
