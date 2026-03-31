@@ -23,6 +23,8 @@ def _():
 
     plt.rcParams["text.usetex"] = False
     plt.rcParams["mathtext.fontset"] = "cm"
+    plt.rcParams['pdf.fonttype'] = 42   # TrueType
+    plt.rcParams['ps.fonttype'] = 42
     font = {"size": 12}
     plt.rc("font", **font)
     return auc, closed_loop, hj, jnp, mo, np, plt

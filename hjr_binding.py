@@ -22,7 +22,8 @@ def _():
     import matplotlib.pyplot as plt
 
     plt.rcParams["text.usetex"] = False
-    plt.rcParams["mathtext.fontset"] = "cm"
+    plt.rcParams["pdf.fonttype"] = 42  # TrueType
+    plt.rcParams["ps.fonttype"] = 42
     font = {"size": 12}
     plt.rc("font", **font)
     return binding, closed_loop, hj, jnp, mo, np, plt
@@ -42,13 +43,13 @@ def _(binding, hj, np):
     # specify the dynamics we are considering
 
     model = binding.binding_model(
-        uMax=3.,
+        uMax=3.0,
         uMin=0.0,
         dR=0.5,
         dC=0.0,
         kf=2.5,
         kr=0.5,
-        gammaX=2.,
+        gammaX=2.0,
         gammaY=2.1,
         gammaXY=1.5,
     )
@@ -66,7 +67,7 @@ def _(binding, hj, np):
 
     x_max = +1.5
     y_max = +1.5
-    z_max = +3.
+    z_max = +3.0
 
     # Specify therapeutic and toxic thresholds
     l1_x = 1.0
@@ -132,8 +133,7 @@ def _(field_name, get_plot_fields, grid, np, plt, time_index, times):
         t_index = int(time_index.value)
         field_2d = field[t_index, :, :, z_index]
         title = (
-            f"{field_name.value} at t={float(times[t_index]):.2f}, "
-            f"z={z_value:.2f}"
+            f"{field_name.value} at t={float(times[t_index]):.2f}, z={z_value:.2f}"
         )
     else:
         field_2d = field[:, :, z_index]
@@ -176,15 +176,32 @@ def _(grid, hj, jnp, l1, l2, model, set_plot_fields, times):
             return jnp.minimum(v, l)
 
         # specify the accuracy with which to solve the HJ Partial Differential Equation
-        solver_settings = hj.SolverSettings.with_accuracy("very_high", value_postprocessor=lambda t, v: vppR(t, v, l1))
+        solver_settings = hj.SolverSettings.with_accuracy(
+            "very_high", value_postprocessor=lambda t, v: vppR(t, v, l1)
+        )
 
         # solve for the value function
-        V1 = hj.solve(hj.SolverSettings.with_accuracy("very_high", value_postprocessor=lambda t, v: vppR(t, v, l1)), 
-                      model, grid, times, l1)
-        V2 = hj.solve(hj.SolverSettings.with_accuracy("very_high", value_postprocessor=lambda t, v: vppR(t, v, l2)), 
-                      model, grid, times, l2)
+        V1 = hj.solve(
+            hj.SolverSettings.with_accuracy(
+                "very_high", value_postprocessor=lambda t, v: vppR(t, v, l1)
+            ),
+            model,
+            grid,
+            times,
+            l1,
+        )
+        V2 = hj.solve(
+            hj.SolverSettings.with_accuracy(
+                "very_high", value_postprocessor=lambda t, v: vppR(t, v, l2)
+            ),
+            model,
+            grid,
+            times,
+            l2,
+        )
 
         return V1, V2
+
 
     VR1, VR2 = _()
     set_plot_fields(lambda fields: {**fields, "VR1": VR1, "VR2": VR2})
@@ -199,12 +216,29 @@ def _(VR1, VR2, grid, hj, jnp, l1, l2, model, set_plot_fields, times):
             i = jnp.argmin(jnp.abs(t - times))
             return jnp.minimum(v, jnp.maximum(l, VR[i, ...]))
 
-        V12 = hj.solve(hj.SolverSettings.with_accuracy("very_high", value_postprocessor=lambda t, v: vppRiRj(t, v, l1, times, VR2)), 
-                      model, grid, times, jnp.maximum(l1, VR2[0, ...]))
-        V21 = hj.solve(hj.SolverSettings.with_accuracy("very_high", value_postprocessor=lambda t, v: vppRiRj(t, v, l2, times, VR1)), 
-                      model, grid, times, jnp.maximum(l2, VR1[0, ...]))
+        V12 = hj.solve(
+            hj.SolverSettings.with_accuracy(
+                "very_high",
+                value_postprocessor=lambda t, v: vppRiRj(t, v, l1, times, VR2),
+            ),
+            model,
+            grid,
+            times,
+            jnp.maximum(l1, VR2[0, ...]),
+        )
+        V21 = hj.solve(
+            hj.SolverSettings.with_accuracy(
+                "very_high",
+                value_postprocessor=lambda t, v: vppRiRj(t, v, l2, times, VR1),
+            ),
+            model,
+            grid,
+            times,
+            jnp.maximum(l2, VR1[0, ...]),
+        )
 
         return V12, V21
+
 
     V12, V21 = _(VR1, VR2)
     set_plot_fields(lambda fields: {**fields, "V12": V12, "V21": V21})
@@ -218,17 +252,17 @@ def _(V12, V21, VR1, VR2, closed_loop, grid, model, times):
     dummyV = 0 * VR1
 
     clR1 = closed_loop.ClosedLoopTrajectory(
-        model, grid, times, VR1, dummyV, initial_state=[0., 0., 0.], steps=100
+        model, grid, times, VR1, dummyV, initial_state=[0.0, 0.0, 0.0], steps=100
     )
     clR2 = closed_loop.ClosedLoopTrajectory(
-        model, grid, times, VR2, dummyV, initial_state=[0., 0., 0.], steps=100
+        model, grid, times, VR2, dummyV, initial_state=[0.0, 0.0, 0.0], steps=100
     )
 
     clR12 = closed_loop.ClosedLoopTrajectory(
-        model, grid, times, V12, VR2, initial_state=[0., 0., 0.], steps=100
+        model, grid, times, V12, VR2, initial_state=[0.0, 0.0, 0.0], steps=100
     )
     clR21 = closed_loop.ClosedLoopTrajectory(
-        model, grid, times, V21, VR1, initial_state=[0., 0., 0.], steps=100
+        model, grid, times, V21, VR1, initial_state=[0.0, 0.0, 0.0], steps=100
     )
     return clR1, clR12, clR2, clR21
 
@@ -249,19 +283,16 @@ def _(VR1, VR2, grid, hj, jnp, l1, l2, model, np, set_plot_fields, times):
         def vppRR(t, v, l1, l2, times, VR1, VR2):
             i = jnp.argmin(jnp.abs(t - times))
             return jnp.minimum(
-                v, 
+                v,
                 jnp.minimum(
-                    jnp.maximum(l1, VR2[i, ...]), 
-                    jnp.maximum(l2, VR1[i, ...])
-                )
+                    jnp.maximum(l1, VR2[i, ...]), jnp.maximum(l2, VR1[i, ...])
+                ),
             )
 
         # specify the accuracy with which to solve the HJ Partial Differential Equation
         solver_settings = hj.SolverSettings.with_accuracy(
             "very_high",
-            value_postprocessor=lambda t, v: vppRR(
-                t, v, l1, l2, times, VR1, VR2
-            ),
+            value_postprocessor=lambda t, v: vppRR(t, v, l1, l2, times, VR1, VR2),
         )
 
         # solve for the value function
@@ -286,7 +317,16 @@ def _(VR1, VR2, VRR, closed_loop, grid, l1, l2, model, times):
     # Form the closed-loop trajectory
 
     clRR = closed_loop.ClosedLoopTrajectoryRR(
-        model, grid, times, VRR, VR1, VR2, l1, l2, initial_state=[0., 0., 0.], steps=100
+        model,
+        grid,
+        times,
+        VRR,
+        VR1,
+        VR2,
+        l1,
+        l2,
+        initial_state=[0.0, 0.0, 0.0],
+        steps=100,
     )
     return (clRR,)
 
@@ -374,10 +414,20 @@ def _(T, clR12, clR21, clRR, l1_x, l2_x, np, plt):
             ax = axs[row, 0]
             cf, cp, cr = COLORS[ckey]
             ax.plot(
-                tt, x_r1[:, i], color=cf, linewidth=LW, label="R1->R2", linestyle=":"
+                tt,
+                x_r1[:, i],
+                color=cf,
+                linewidth=LW,
+                label="R1->R2",
+                linestyle=":",
             )
             ax.plot(
-                tt, x_r2[:, i], color=cp, linewidth=LW, label="R2->R1", linestyle="-.", 
+                tt,
+                x_r2[:, i],
+                color=cp,
+                linewidth=LW,
+                label="R2->R1",
+                linestyle="-.",
             )
             ax.plot(
                 tt, x_rr[:, i], color=cr, linewidth=LW, linestyle="-", label="RR"
@@ -562,7 +612,6 @@ def _(
 
         # ── Figure ─────────────────────────────────────────────────────────────────────
 
-
         fig, axs = plt.subplots(2, 2, figsize=(8, 7), constrained_layout=True)
 
         # Left column – compartment concentrations
@@ -584,7 +633,12 @@ def _(
                 tt, x_r1[:, i], color=cf, linewidth=LW, label="R1", linestyle=":"
             )
             ax.plot(
-                tt, x_r2[:, i], color=cp, linewidth=LW, label="R2", linestyle="-.", 
+                tt,
+                x_r2[:, i],
+                color=cp,
+                linewidth=LW,
+                label="R2",
+                linestyle="-.",
             )
             style_ax(ax, ylabel, title, ylim=(-0.1, ylim + 0.1))
 
@@ -615,37 +669,39 @@ def _(
 
         t_index = 100
         value_2d = VRR[t_index, :, :, z_index]
-        title = (
-            r"$V_{RR}\left([\mathbf{X}], [\mathbf{Y}], [\mathbf{X-Y}]=0, t=-3\right)$"
-        )
-        print("t=",times[t_index])
-    
+        title = r"$V_{RR}\left([\mathbf{X}], [\mathbf{Y}], [\mathbf{X-Y}]=0, t=-3\right)$"
+        print("t=", times[t_index])
+
         X, Y = np.meshgrid(x_coords, y_coords, indexing="ij")
         vmax = float(np.max(np.abs(value_2d)))
 
         ax = axs[1, 1]
         if vmax > 0.0:
             norm = mcolors.TwoSlopeNorm(vmin=-vmax, vcenter=0.0, vmax=vmax)
-            contour = ax.contourf(X, Y, -value_2d, levels=31, cmap="RdBu", norm=norm)
+            contour = ax.contourf(
+                X, Y, -value_2d, levels=31, cmap="RdBu", norm=norm
+            )
             cbar_ticks = [-vmax, vmax]
         else:
             contour = ax.contourf(X, Y, -value_2d, levels=31, cmap="RdBu")
             cbar_ticks = [value_2d.min(), value_2d.max()]
 
         print(cbar_ticks)
-    
+
         # ax.contour(X, Y, -value_2d, levels=[0], colors="black", linewidths=2.0)
         ax.set_xlabel(r"$[\mathbf{X}]$")
         ax.set_ylabel(r"$[\mathbf{Y}]$")
         ax.set_title(title)
-    
+
         # cbar = fig.colorbar(contour, ax=ax, label=r"$V_{RR}$", ticks=cbar_ticks)
         # cbar = fig.colorbar(contour, ax=ax, ticks=[0])
         cbar = fig.colorbar(contour, ax=ax, label=r"$V_{RR}$", ticks=[0.15, 0.5])
         from matplotlib.ticker import FormatStrFormatter
+
         cbar.ax.yaxis.set_major_formatter(FormatStrFormatter("%.1f"))
         cbar.set_label(r"$V_{RR}$", rotation=0, labelpad=-25)
         cbar.ax.yaxis.set_label_coords(3.0, 0.5)  # x, y in axes coords
+
 
     _()
     plt.savefig("rr.pdf")
