@@ -1,6 +1,7 @@
 import math
 
 import numpy as np
+from numpy.testing import verbose
 import scipy as sp
 from tqdm.auto import tqdm
 
@@ -28,6 +29,7 @@ class ClosedLoopTrajectory:
         target=None,
         thresh=-np.inf,
         steps=100,
+        verbose=False,
         **kwargs,
     ):
         """
@@ -59,6 +61,12 @@ class ClosedLoopTrajectory:
 
         self._initial_state = np.array(initial_state)
         self._steps = max(int(steps), 1)
+        self._grid_mins = np.array(
+            [np.asarray(coords)[0] for coords in self._grid.coordinate_vectors]
+        )
+        self._grid_maxs = np.array(
+            [np.asarray(coords)[-1] for coords in self._grid.coordinate_vectors]
+        )
 
         self._u = None
         self._d = None
@@ -66,7 +74,8 @@ class ClosedLoopTrajectory:
         self._us = [None] * self._steps
         self._ds = [None] * self._steps
         self._sols = [None] * self._steps
-
+        
+        self.verbose = verbose
         self._solve_ivp(**kwargs)
 
     def x(self, t):
@@ -122,9 +131,9 @@ class ClosedLoopTrajectory:
             value_left = self._grid.interpolate(V[j, ...], state=state)
             value_right = self._grid.interpolate(V[k, ...], state=state)
 
-            print(f"t: {t:.2f}, value_left: {value_left:.2f}, value_right: {value_right:.2f}")
-            print(f"t: {t:.2f}, time_left: {self._times[j]:.2f}, time_right: {self._times[k]:.2f}")
-            print(f"t: {t:.2f}, state: {state}")
+            # print(f"t: {t:.2f}, value_left: {value_left:.2f}, value_right: {value_right:.2f}")
+            # print(f"t: {t:.2f}, time_left: {self._times[j]:.2f}, time_right: {self._times[k]:.2f}")
+            # print(f"t: {t:.2f}, state: {state}")
 
             value = (
                 (t - self._times[j]) * value_right + (self._times[k] - t) * value_left
@@ -154,6 +163,16 @@ class ClosedLoopTrajectory:
                 (t - self._times[0]) / (self._times[-1] - self._times[0]) * self._steps
             )
 
+    def _check_state_in_bounds(self, t, state, label):
+        below = state < self._grid_mins
+        above = state > self._grid_maxs
+        if np.any(below | above):
+            print(
+                f"t: {t:.2f}, {label} STATE LEFT GRID BOUNDS! "
+                f"state: {state}, mins: {self._grid_mins}, maxs: {self._grid_maxs}, "
+                f"below: {below}, above: {above}"
+            )
+
     def _solve_ivp(self, **kwargs):
         state = self._initial_state
         switched = False
@@ -163,6 +182,7 @@ class ClosedLoopTrajectory:
             t_plus = (self._times[-1] - self._times[0]) * (
                 (i + 1) / self._steps
             ) + self._times[0]
+            self._check_state_in_bounds(t, state, "pre-solve")
 
             if (
                 not switched
@@ -172,11 +192,10 @@ class ClosedLoopTrajectory:
                 switched = True
                 self._V = self._V_off
 
-            print(f"t: {t:.2f}, value: {self._value(t, state):.2f}, switched: {switched}")
+            if self.verbose:
+                print(f"t: {t:.2f}, value: {self._value(t, state):.2f}, switched: {switched}")
 
             gradient = self._gradient(t, state)
-
-            print(f"t: {t:.2f}, POST GRADIENT")
 
             if switched:
                 self._u = 0 * self._model.optimal_control(state, t, gradient)
@@ -184,20 +203,17 @@ class ClosedLoopTrajectory:
                 self._u = self._model.optimal_control(state, t, gradient)
             self._d = self._model.optimal_disturbance(state, t, gradient)
 
-            print(f"t: {t:.2f}, POST OC")
-
             # check if nan
             if np.isnan(self._value(t, state)):
-                print(f"t: {t:.2f}, value is nan, breaking")
+                print(f"t: {t:.2f}, VALUE IS NAN, BREAKING")
                 break
 
             sol = sp.integrate.solve_ivp(
                 self._dynamics, [t, t_plus], state, dense_output=True, **kwargs
             )
 
-            print(f"t: {t:.2f}, POST SOLVE")
-
             state = sol.sol(t_plus)
+            self._check_state_in_bounds(t_plus, state, "post-solve")
             self._sols[i] = sol.sol
             self._us[i] = self._u
             self._ds[i] = self._d
@@ -253,6 +269,12 @@ class ClosedLoopTrajectoryRAA:
 
         self._initial_state = np.array(initial_state)
         self._steps = max(int(steps), 1)
+        self._grid_mins = np.array(
+            [np.asarray(coords)[0] for coords in self._grid.coordinate_vectors]
+        )
+        self._grid_maxs = np.array(
+            [np.asarray(coords)[-1] for coords in self._grid.coordinate_vectors]
+        )
 
         self._u = None
         self._d = None
@@ -344,6 +366,16 @@ class ClosedLoopTrajectoryRAA:
                 (t - self._times[0]) / (self._times[-1] - self._times[0]) * self._steps
             )
 
+    def _check_state_in_bounds(self, t, state, label):
+        below = state < self._grid_mins
+        above = state > self._grid_maxs
+        if np.any(below | above):
+            print(
+                f"t: {t:.2f}, {label} state left grid bounds, "
+                f"state: {state}, mins: {self._grid_mins}, maxs: {self._grid_maxs}, "
+                f"below: {below}, above: {above}"
+            )
+
     def _solve_ivp(self, **kwargs):
         state = self._initial_state
         switched = False
@@ -352,6 +384,7 @@ class ClosedLoopTrajectoryRAA:
             t_plus = (self._times[-1] - self._times[0]) * (
                 (i + 1) / self._steps
             ) + self._times[0]
+            self._check_state_in_bounds(t, state, "pre-solve")
 
             if not switched and self._grid.interpolate(
                 self._target, state=state
@@ -369,6 +402,7 @@ class ClosedLoopTrajectoryRAA:
             )
 
             state = sol.sol(t_plus)
+            self._check_state_in_bounds(t_plus, state, "post-solve")
             self._sols[i] = sol.sol
             self._us[i] = self._u
             self._ds[i] = self._d
@@ -427,6 +461,12 @@ class ClosedLoopTrajectoryRR:
 
         self._initial_state = np.array(initial_state)
         self._steps = max(int(steps), 1)
+        self._grid_mins = np.array(
+            [np.asarray(coords)[0] for coords in self._grid.coordinate_vectors]
+        )
+        self._grid_maxs = np.array(
+            [np.asarray(coords)[-1] for coords in self._grid.coordinate_vectors]
+        )
 
         self._u = None
         self._d = None
@@ -518,6 +558,16 @@ class ClosedLoopTrajectoryRR:
                 (t - self._times[0]) / (self._times[-1] - self._times[0]) * self._steps
             )
 
+    def _check_state_in_bounds(self, t, state, label):
+        below = state < self._grid_mins
+        above = state > self._grid_maxs
+        if np.any(below | above):
+            print(
+                f"t: {t:.2f}, {label} state left grid bounds, "
+                f"state: {state}, mins: {self._grid_mins}, maxs: {self._grid_maxs}, "
+                f"below: {below}, above: {above}"
+            )
+
     def _solve_ivp(self, **kwargs):
         state = self._initial_state
         switched = False
@@ -526,6 +576,7 @@ class ClosedLoopTrajectoryRR:
             t_plus = (self._times[-1] - self._times[0]) * (
                 (i + 1) / self._steps
             ) + self._times[0]
+            self._check_state_in_bounds(t, state, "pre-solve")
 
             ## SWITCHING CONDITIONS
             if not switched and self._grid.interpolate(
@@ -552,6 +603,7 @@ class ClosedLoopTrajectoryRR:
             )
 
             state = sol.sol(t_plus)
+            self._check_state_in_bounds(t_plus, state, "post-solve")
             self._sols[i] = sol.sol
             self._us[i] = self._u
             self._ds[i] = self._d

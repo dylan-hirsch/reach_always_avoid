@@ -62,9 +62,9 @@ def _(binding, hj, np):
     y_min = -0.1
     z_min = -0.1
 
-    x_max = +1.1
-    y_max = +1.1
-    z_max = +1.1
+    x_max = +1.5
+    y_max = +1.5
+    z_max = +1.5
 
     # Specify therapeutic and toxic thresholds
     l1_x = 1.0
@@ -82,7 +82,7 @@ def _(binding, hj, np):
     # specify the goal
     l1 = l1_x - grid.states[..., 0]
     l2 = l2_x - grid.states[..., 1]
-    return T, grid, l1, l1_x, l2, l2_x, model, times
+    return grid, l1, l2, model, times
 
 
 @app.cell
@@ -206,11 +206,11 @@ def _(VR1, VR2, grid, hj, jnp, l1, l2, model, set_plot_fields, times):
 
     V12, V21 = _(VR1, VR2)
     set_plot_fields(lambda fields: {**fields, "V12": V12, "V21": V21})
-    return
+    return V12, V21
 
 
 @app.cell
-def _(VR1, closed_loop, grid, model, times):
+def _(V12, V21, VR1, VR2, closed_loop, grid, model, times):
     # Form the closed-loop trajectory
 
     dummyV = 0 * VR1
@@ -218,22 +218,16 @@ def _(VR1, closed_loop, grid, model, times):
     clR1 = closed_loop.ClosedLoopTrajectory(
         model, grid, times, VR1, dummyV, initial_state=[0.0] * 3, steps=100
     )
-    # clR2 = closed_loop.ClosedLoopTrajectory(
-    #     model, grid, times, VR2, dummyV, initial_state=[0.0] * 3, steps=100
-    # )
+    clR2 = closed_loop.ClosedLoopTrajectory(
+        model, grid, times, VR2, dummyV, initial_state=[0.0] * 3, steps=100
+    )
 
-    # clR12 = closed_loop.ClosedLoopTrajectory(
-    #     model, grid, times, V12, VR2, initial_state=[0.0] * 3, steps=100
-    # )
-    # clR21 = closed_loop.ClosedLoopTrajectory(
-    #     model, grid, times, V21, VR1, initial_state=[0.0] * 3, steps=100
-    # )
-    return (clR1,)
-
-
-@app.cell
-def _(clR1):
-    clR1.x
+    clR12 = closed_loop.ClosedLoopTrajectory(
+        model, grid, times, V12, VR2, initial_state=[0.0] * 3, steps=100
+    )
+    clR21 = closed_loop.ClosedLoopTrajectory(
+        model, grid, times, V21, VR1, initial_state=[0.0] * 3, steps=100
+    )
     return
 
 
@@ -286,11 +280,11 @@ def _(VR1, VR2, grid, hj, jnp, l1, l2, model, np, set_plot_fields, times):
 
 
 @app.cell
-def _(VR1, VR2, VRR, closed_loop, grid, l, model, times):
+def _(VR1, VR2, VRR, closed_loop, grid, l1, l2, model, times):
     # Form the closed-loop trajectory
 
     clRR = closed_loop.ClosedLoopTrajectoryRR(
-        model, grid, times, VRR, VR1, VR2, l, initial_state=[0.0] * 3, steps=100
+        model, grid, times, VRR, VR1, VR2, l1, l2, initial_state=[0.0] * 3, steps=100
     )
     return
 
@@ -303,8 +297,8 @@ def _(mo):
     return
 
 
-@app.cell
-def _(T, clR1, l1_x, l2_x, np, plt):
+app._unparsable_cell(
+    r"""
     def _():
 
         time_var = r"$\tau$"
@@ -353,19 +347,15 @@ def _(T, clR1, l1_x, l2_x, np, plt):
         ts = np.linspace(-T, 0, 1000)
         tt = ts + T
 
-        x_r1 = x_r2 = x_rr = np.array([clR1.x(t) for t in ts if t < -1.51])
-        u_r1 = u_r2 = u_rr = np.array([clR1.u(t) for t in ts if t < -1.51])
-        d_r1 = d_r2 = d_rr = np.array([clR1.d(t) for t in ts if t < -1.51])
-        tt = ts[:569]
-        # x_r1 = np.array([clR12.x(t) for t in ts])
-        # x_r2 = np.array([clR21.x(t) for t in ts])
-        # x_rr = np.array([clRR.x(t) for t in ts])
-        # u_r1 = np.array([clR12.u(t) for t in ts])
-        # u_r2 = np.array([clR21.u(t) for t in ts])
-        # u_rr = np.array([clRR.u(t) for t in ts])
-        # d_r1 = np.array([clR12.d(t) for t in ts])
-        # d_r2 = np.array([clR21.d(t) for t in ts])
-        # d_rr = np.array([clRR.d(t) for t in ts])
+        x_r1 = np.array([clR12.x(t) for t in ts])
+        x_r2 = np.array([clR21.x(t) for t in ts])
+        x_rr = np.array([clRR.x(t) for t in ts])
+        u_r1 = np.array([clR12.u(t) for t in ts])
+        u_r2 = np.array([clR21.u(t) for t in ts])
+        u_rr = np.array([clRR.u(t) for t in ts])
+        d_r1 = np.array([clR12.d(t) for t in ts])
+        d_r2 = np.array([clR21.d(t) for t in ts])
+        d_rr = np.array([clRR.d(t) for t in ts])
         # om = np.array([omega(t) for t in ts])
 
         # ── Figure ─────────────────────────────────────────────────────────────────────
@@ -376,7 +366,7 @@ def _(T, clR1, l1_x, l2_x, np, plt):
         compartments = [
             (0, r"$[\mathbf{X}](\tau)$", "[X]", "X", 2),
             (1, r"$[\mathbf{Y}](\tau)$", "[Y]", "Y", 2),
-            (2, r"$[\mathbf{X-Y}](\tau)$", "[X-Y]", "X-Y", 6),
+            (2, r"$[\mathbf{X-Y}](\tau)$", "[X-Y]", "X-Y", grid.),
         ]
         for row, (i, ylabel, title, ckey, ylim) in enumerate(compartments):
             ax = axs[row, 0]
@@ -393,7 +383,7 @@ def _(T, clR1, l1_x, l2_x, np, plt):
             style_ax(ax, ylabel, title, ylim=(-0.1, ylim + 0.1))
 
         axs[0, 0].legend(ncol=1, fontsize=LEGEND_FONT, loc="upper left")
-        axs[1, 0].axhline(
+        axs[0, 0].axhline(
             y=l1_x,
             linestyle="--",
             color="#1F6FCB",
@@ -401,7 +391,7 @@ def _(T, clR1, l1_x, l2_x, np, plt):
             label="Thera. Thresh 1",
         )
         axs[1, 0].legend(fontsize=LEGEND_FONT)
-        axs[2, 0].axhline(
+        axs[1, 0].axhline(
             y=l2_x,
             linestyle="--",
             color="#27AE60",
@@ -477,22 +467,9 @@ def _(T, clR1, l1_x, l2_x, np, plt):
     _()
     plt.savefig("rr.pdf")
     plt.show()
-    return
-
-
-@app.cell
-def _(T, clR1, np):
-    ts = np.linspace(-T, 0, 1000)
-    tt = ts + T
-    x_r1 = np.array([clR1.x(t) for t in ts if t < -1.51])
-    x_r1[:, 0]
-    return (tt,)
-
-
-@app.cell
-def _(tt):
-    tt[:569]
-    return
+    """,
+    name="_"
+)
 
 
 @app.cell
