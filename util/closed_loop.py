@@ -2,6 +2,11 @@ import math
 
 import numpy as np
 import scipy as sp
+from tqdm.auto import tqdm
+
+
+def _progress_range(steps, desc):
+    return tqdm(range(steps), total=steps, desc=desc, leave=False)
 
 
 class ClosedLoopTrajectory:
@@ -117,9 +122,15 @@ class ClosedLoopTrajectory:
             value_left = self._grid.interpolate(V[j, ...], state=state)
             value_right = self._grid.interpolate(V[k, ...], state=state)
 
+            print(f"t: {t:.2f}, value_left: {value_left:.2f}, value_right: {value_right:.2f}")
+            print(f"t: {t:.2f}, time_left: {self._times[j]:.2f}, time_right: {self._times[k]:.2f}")
+            print(f"t: {t:.2f}, state: {state}")
+
             value = (
                 (t - self._times[j]) * value_right + (self._times[k] - t) * value_left
             ) / (self._times[k] - self._times[j])
+
+            print(f"t: {t:.2f}, value: {value:.2f}")
 
         return value
 
@@ -147,7 +158,7 @@ class ClosedLoopTrajectory:
         state = self._initial_state
         switched = False
 
-        for i in range(self._steps):
+        for i in _progress_range(self._steps, type(self).__name__):
             t = (self._times[-1] - self._times[0]) * (i / self._steps) + self._times[0]
             t_plus = (self._times[-1] - self._times[0]) * (
                 (i + 1) / self._steps
@@ -161,7 +172,11 @@ class ClosedLoopTrajectory:
                 switched = True
                 self._V = self._V_off
 
+            print(f"t: {t:.2f}, value: {self._value(t, state):.2f}, switched: {switched}")
+
             gradient = self._gradient(t, state)
+
+            print(f"t: {t:.2f}, POST GRADIENT")
 
             if switched:
                 self._u = 0 * self._model.optimal_control(state, t, gradient)
@@ -169,9 +184,18 @@ class ClosedLoopTrajectory:
                 self._u = self._model.optimal_control(state, t, gradient)
             self._d = self._model.optimal_disturbance(state, t, gradient)
 
+            print(f"t: {t:.2f}, POST OC")
+
+            # check if nan
+            if np.isnan(self._value(t, state)):
+                print(f"t: {t:.2f}, value is nan, breaking")
+                break
+
             sol = sp.integrate.solve_ivp(
                 self._dynamics, [t, t_plus], state, dense_output=True, **kwargs
             )
+
+            print(f"t: {t:.2f}, POST SOLVE")
 
             state = sol.sol(t_plus)
             self._sols[i] = sol.sol
@@ -323,7 +347,7 @@ class ClosedLoopTrajectoryRAA:
     def _solve_ivp(self, **kwargs):
         state = self._initial_state
         switched = False
-        for i in range(self._steps):
+        for i in _progress_range(self._steps, type(self).__name__):
             t = (self._times[-1] - self._times[0]) * (i / self._steps) + self._times[0]
             t_plus = (self._times[-1] - self._times[0]) * (
                 (i + 1) / self._steps
@@ -366,7 +390,8 @@ class ClosedLoopTrajectoryRR:
         VRR,
         VR1,
         VR2,
-        target,
+        target_1,
+        target_2,
         initial_state,
         steps=100,
         theta=1.0,
@@ -395,7 +420,9 @@ class ClosedLoopTrajectoryRR:
             self._VRR = VRR[::-1, ...]
             self._VR1 = VR1[::-1, ...]
             self._VR2 = VR2[::-1, ...]
-            self._target = target
+            self._target_1 = target_1
+            self._target_2 = target_2
+
         self._V = self._VRR
 
         self._initial_state = np.array(initial_state)
@@ -494,7 +521,7 @@ class ClosedLoopTrajectoryRR:
     def _solve_ivp(self, **kwargs):
         state = self._initial_state
         switched = False
-        for i in range(self._steps):
+        for i in _progress_range(self._steps, type(self).__name__):
             t = (self._times[-1] - self._times[0]) * (i / self._steps) + self._times[0]
             t_plus = (self._times[-1] - self._times[0]) * (
                 (i + 1) / self._steps
@@ -502,18 +529,18 @@ class ClosedLoopTrajectoryRR:
 
             ## SWITCHING CONDITIONS
             if not switched and self._grid.interpolate(
-                self._target, # FIXME
-                state=state
-            ) <= self._theta * self._value(t, state, self._VR1):
-                switched = True
-                self._V = self._VR1
-
-            elif not switched and self._grid.interpolate(
-                self._target, # FIXME
+                self._target_1, # FIXME?
                 state=state
             ) <= self._theta * self._value(t, state, self._VR2):
                 switched = True
                 self._V = self._VR2
+
+            elif not switched and self._grid.interpolate(
+                self._target_2, # FIXME?
+                state=state
+            ) <= self._theta * self._value(t, state, self._VR1):
+                switched = True
+                self._V = self._VR1
 
             gradient = self._gradient(t, state)
 

@@ -33,7 +33,7 @@ def _(binding, hj, np):
     # This is where all of the work of HJR happens, namely computing the value function V
 
     # specify the time horizon of the problem
-    T = 3
+    T = 3.5
 
     # specify the weening period
     # W_start = 6  # start weening
@@ -206,11 +206,11 @@ def _(VR1, VR2, grid, hj, jnp, l1, l2, model, set_plot_fields, times):
 
     V12, V21 = _(VR1, VR2)
     set_plot_fields(lambda fields: {**fields, "V12": V12, "V21": V21})
-    return V12, V21
+    return
 
 
 @app.cell
-def _(V12, V21, VR1, VR2, closed_loop, grid, model, times):
+def _(VR1, closed_loop, grid, model, times):
     # Form the closed-loop trajectory
 
     dummyV = 0 * VR1
@@ -218,17 +218,23 @@ def _(V12, V21, VR1, VR2, closed_loop, grid, model, times):
     clR1 = closed_loop.ClosedLoopTrajectory(
         model, grid, times, VR1, dummyV, initial_state=[0.0] * 3, steps=100
     )
-    clR2 = closed_loop.ClosedLoopTrajectory(
-        model, grid, times, VR2, dummyV, initial_state=[0.0] * 3, steps=100
-    )
+    # clR2 = closed_loop.ClosedLoopTrajectory(
+    #     model, grid, times, VR2, dummyV, initial_state=[0.0] * 3, steps=100
+    # )
 
-    clR12 = closed_loop.ClosedLoopTrajectory(
-        model, grid, times, V12, VR2, initial_state=[0.0] * 3, steps=100
-    )
-    clR21 = closed_loop.ClosedLoopTrajectory(
-        model, grid, times, V21, VR1, initial_state=[0.0] * 3, steps=100
-    )
-    return clR12, clR21
+    # clR12 = closed_loop.ClosedLoopTrajectory(
+    #     model, grid, times, V12, VR2, initial_state=[0.0] * 3, steps=100
+    # )
+    # clR21 = closed_loop.ClosedLoopTrajectory(
+    #     model, grid, times, V21, VR1, initial_state=[0.0] * 3, steps=100
+    # )
+    return (clR1,)
+
+
+@app.cell
+def _(clR1):
+    clR1.x
+    return
 
 
 @app.cell(hide_code=True)
@@ -286,7 +292,7 @@ def _(VR1, VR2, VRR, closed_loop, grid, l, model, times):
     clRR = closed_loop.ClosedLoopTrajectoryRR(
         model, grid, times, VRR, VR1, VR2, l, initial_state=[0.0] * 3, steps=100
     )
-    return (clRR,)
+    return
 
 
 @app.cell(hide_code=True)
@@ -298,7 +304,7 @@ def _(mo):
 
 
 @app.cell
-def _(T, clR12, clR21, clRR, l1_x, l2_x, np, plt):
+def _(T, clR1, l1_x, l2_x, np, plt):
     def _():
 
         time_var = r"$\tau$"
@@ -313,9 +319,9 @@ def _(T, clR12, clR21, clRR, l1_x, l2_x, np, plt):
             ax.set_xlabel(time_var, fontsize=LABEL_FONT)
             ax.set_ylabel(ylabel, fontsize=LABEL_FONT)
             ax.set_title(title, fontsize=LABEL_FONT)
-            ax.set_xlim(xlim)
-            if ylim is not None:
-                ax.set_ylim(ylim)
+            # ax.set_xlim(xlim)
+            # if ylim is not None:
+            #     ax.set_ylim(ylim)
 
         # ── Style & constants ──────────────────────────────────────────────────────────
 
@@ -347,15 +353,19 @@ def _(T, clR12, clR21, clRR, l1_x, l2_x, np, plt):
         ts = np.linspace(-T, 0, 1000)
         tt = ts + T
 
-        x_r1 = np.array([clR12.x(t) for t in ts])
-        x_r2 = np.array([clR21.x(t) for t in ts])
-        x_rr = np.array([clRR.x(t) for t in ts])
-        u_r1 = np.array([clR12.u(t) for t in ts])
-        u_r2 = np.array([clR21.u(t) for t in ts])
-        u_rr = np.array([clRR.u(t) for t in ts])
-        d_r1 = np.array([clR12.d(t) for t in ts])
-        d_r2 = np.array([clR21.d(t) for t in ts])
-        d_rr = np.array([clRR.d(t) for t in ts])
+        x_r1 = x_r2 = x_rr = np.array([clR1.x(t) for t in ts if t < -1.51])
+        u_r1 = u_r2 = u_rr = np.array([clR1.u(t) for t in ts if t < -1.51])
+        d_r1 = d_r2 = d_rr = np.array([clR1.d(t) for t in ts if t < -1.51])
+        tt = ts[:569]
+        # x_r1 = np.array([clR12.x(t) for t in ts])
+        # x_r2 = np.array([clR21.x(t) for t in ts])
+        # x_rr = np.array([clRR.x(t) for t in ts])
+        # u_r1 = np.array([clR12.u(t) for t in ts])
+        # u_r2 = np.array([clR21.u(t) for t in ts])
+        # u_rr = np.array([clRR.u(t) for t in ts])
+        # d_r1 = np.array([clR12.d(t) for t in ts])
+        # d_r2 = np.array([clR21.d(t) for t in ts])
+        # d_rr = np.array([clRR.d(t) for t in ts])
         # om = np.array([omega(t) for t in ts])
 
         # ── Figure ─────────────────────────────────────────────────────────────────────
@@ -407,14 +417,14 @@ def _(T, clR12, clR21, clRR, l1_x, l2_x, np, plt):
                 1,
                 r"$\mathbf{u}^*_1(\tau)$",
                 "[X]",
-                "[X]",
+                "X",
             ),
             (
                 1,
                 1,
                 r"$\mathbf{u}^*_2(\tau)$",
                 "[Y]",
-                "[Y]",
+                "Y",
             ),
         ]
         for row, (i, scale, ylabel, title, ckey) in enumerate(dosing):
@@ -467,6 +477,21 @@ def _(T, clR12, clR21, clRR, l1_x, l2_x, np, plt):
     _()
     plt.savefig("rr.pdf")
     plt.show()
+    return
+
+
+@app.cell
+def _(T, clR1, np):
+    ts = np.linspace(-T, 0, 1000)
+    tt = ts + T
+    x_r1 = np.array([clR1.x(t) for t in ts if t < -1.51])
+    x_r1[:, 0]
+    return (tt,)
+
+
+@app.cell
+def _(tt):
+    tt[:569]
     return
 
 
