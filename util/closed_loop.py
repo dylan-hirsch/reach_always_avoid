@@ -139,7 +139,7 @@ class ClosedLoopTrajectory:
                 (t - self._times[j]) * value_right + (self._times[k] - t) * value_left
             ) / (self._times[k] - self._times[j])
 
-            print(f"t: {t:.2f}, value: {value:.2f}")
+            # print(f"t: {t:.2f}, value: {value:.2f}")
 
         return value
 

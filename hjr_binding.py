@@ -46,9 +46,10 @@ def _(binding, hj, np):
         uMin=0.0,
         dR=0.7,
         dC=0.0,
-        kf=1.,
+        kf=1.5,
         kr=0.5,
-        gamma=1.,
+        gamma=2.,
+        gammaXY=1.,
     )
 
     # specify the number of voxels to divide the spatial and temporal axes
@@ -82,7 +83,7 @@ def _(binding, hj, np):
     # specify the goal
     l1 = l1_x - grid.states[..., 0]
     l2 = l2_x - grid.states[..., 1]
-    return grid, l1, l2, model, times
+    return T, grid, l1, l1_x, l2, l2_x, model, times
 
 
 @app.cell
@@ -228,7 +229,7 @@ def _(V12, V21, VR1, VR2, closed_loop, grid, model, times):
     clR21 = closed_loop.ClosedLoopTrajectory(
         model, grid, times, V21, VR1, initial_state=[0.0] * 3, steps=100
     )
-    return
+    return clR12, clR21
 
 
 @app.cell(hide_code=True)
@@ -286,7 +287,7 @@ def _(VR1, VR2, VRR, closed_loop, grid, l1, l2, model, times):
     clRR = closed_loop.ClosedLoopTrajectoryRR(
         model, grid, times, VRR, VR1, VR2, l1, l2, initial_state=[0.0] * 3, steps=100
     )
-    return
+    return (clRR,)
 
 
 @app.cell(hide_code=True)
@@ -297,8 +298,8 @@ def _(mo):
     return
 
 
-app._unparsable_cell(
-    r"""
+@app.cell
+def _(T, clR12, clR21, clRR, l1_x, l2_x, np, plt):
     def _():
 
         time_var = r"$\tau$"
@@ -366,7 +367,7 @@ app._unparsable_cell(
         compartments = [
             (0, r"$[\mathbf{X}](\tau)$", "[X]", "X", 2),
             (1, r"$[\mathbf{Y}](\tau)$", "[Y]", "Y", 2),
-            (2, r"$[\mathbf{X-Y}](\tau)$", "[X-Y]", "X-Y", grid.),
+            (2, r"$[\mathbf{X-Y}](\tau)$", "[X-Y]", "X-Y", 2),
         ]
         for row, (i, ylabel, title, ckey, ylim) in enumerate(compartments):
             ax = axs[row, 0]
@@ -467,9 +468,7 @@ app._unparsable_cell(
     _()
     plt.savefig("rr.pdf")
     plt.show()
-    """,
-    name="_"
-)
+    return
 
 
 @app.cell
