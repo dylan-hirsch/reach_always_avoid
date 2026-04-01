@@ -580,14 +580,14 @@ class ClosedLoopTrajectoryRR:
 
             ## SWITCHING CONDITIONS
             if not switched and self._grid.interpolate(
-                self._target_1, # FIXME?
+                self._target_1,
                 state=state
             ) <= self._theta * self._value(t, state, self._VR2):
                 switched = True
                 self._V = self._VR2
 
             elif not switched and self._grid.interpolate(
-                self._target_2, # FIXME?
+                self._target_2,
                 state=state
             ) <= self._theta * self._value(t, state, self._VR1):
                 switched = True

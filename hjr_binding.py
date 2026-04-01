@@ -156,7 +156,7 @@ def _(field_name, get_plot_fields, grid, np, plt, time_index, times):
     fig.colorbar(contour, ax=ax, label=field_name.value)
     plt.tight_layout()
     plt.show()
-    return field_map, mcolors
+    return
 
 
 @app.cell(hide_code=True)
@@ -184,11 +184,35 @@ def _(grid, hj, jnp, l1, l2, model, set_plot_fields, times):
         V2 = hj.solve(hj.SolverSettings.with_accuracy("very_high", value_postprocessor=lambda t, v: vppR(t, v, l2)), 
                       model, grid, times, l2)
 
-        return V1, V2
+        Vboth = hj.solve(hj.SolverSettings.with_accuracy("very_high", value_postprocessor=lambda t, v: vppR(t, v, jnp.maximum(l1, l2))), 
+                      model, grid, times, jnp.maximum(l1, l2))
 
-    VR1, VR2 = _()
+        return V1, V2, Vboth
+
+    VR1, VR2, Vboth = _()
     set_plot_fields(lambda fields: {**fields, "VR1": VR1, "VR2": VR2})
     return VR1, VR2
+
+
+@app.cell
+def _(grid, hj, jnp, l1, l2, model, set_plot_fields, times):
+    def _():
+
+        # specify the reach problem
+        def vppR(t, v, l):
+            return jnp.minimum(v, l)
+
+        # specify the accuracy with which to solve the HJ Partial Differential Equation
+        solver_settings = hj.SolverSettings.with_accuracy("very_high", value_postprocessor=lambda t, v: vppR(t, v, l1))
+
+        Vboth = hj.solve(hj.SolverSettings.with_accuracy("very_high", value_postprocessor=lambda t, v: vppR(t, v, jnp.maximum(l1, l2))), 
+                      model, grid, times, jnp.maximum(l1, l2))
+
+        return Vboth
+
+    VRboth = _()
+    set_plot_fields(lambda fields: {**fields, "VRboth": VRboth})
+    return (VRboth,)
 
 
 @app.cell
@@ -212,7 +236,7 @@ def _(VR1, VR2, grid, hj, jnp, l1, l2, model, set_plot_fields, times):
 
 
 @app.cell
-def _(V12, V21, VR1, VR2, closed_loop, grid, model, times):
+def _(V12, V21, VR1, VR2, VRboth, closed_loop, grid, model, times):
     # Form the closed-loop trajectory
 
     dummyV = 0 * VR1
@@ -223,6 +247,9 @@ def _(V12, V21, VR1, VR2, closed_loop, grid, model, times):
     clR2 = closed_loop.ClosedLoopTrajectory(
         model, grid, times, VR2, dummyV, initial_state=[0., 0., 0.], steps=100
     )
+    clRboth = closed_loop.ClosedLoopTrajectory(
+        model, grid, times, VRboth, dummyV, initial_state=[0., 0., 0.], steps=100
+    )
 
     clR12 = closed_loop.ClosedLoopTrajectory(
         model, grid, times, V12, VR2, initial_state=[0., 0., 0.], steps=100
@@ -230,7 +257,7 @@ def _(V12, V21, VR1, VR2, closed_loop, grid, model, times):
     clR21 = closed_loop.ClosedLoopTrajectory(
         model, grid, times, V21, VR1, initial_state=[0., 0., 0.], steps=100
     )
-    return clR1, clR12, clR2, clR21
+    return clR12, clR21, clRboth
 
 
 @app.cell(hide_code=True)
@@ -473,23 +500,8 @@ def _(T, clR12, clR21, clRR, l1_x, l2_x, np, plt):
 
 
 @app.cell
-def _(
-    T,
-    VRR,
-    clR1,
-    clR2,
-    clRR,
-    field_map,
-    field_name,
-    grid,
-    l1_x,
-    l2_x,
-    mcolors,
-    np,
-    plt,
-    times,
-):
-    # Square version
+def _(T, clRR, clRboth, l1_x, l2_x, np, plt):
+    # Two version
     def _():
 
         time_var = r"$\tau$"
@@ -500,7 +512,7 @@ def _(
         #     S1, S2 = W_start - T, W_end - T
         #     return np.clip(1.0 - (t - S1) / (S2 - S1), 0.0, 1.0)
 
-        def style_ax(ax, ylabel, title, xlim=(0, T + 0.1), ylim=None):
+        def style_ax(ax, ylabel, title, xlim=(0, T + 0.5), ylim=None):
             ax.set_xlabel(time_var, fontsize=LABEL_FONT)
             ax.set_ylabel(ylabel, fontsize=LABEL_FONT)
             ax.set_title(title, fontsize=LABEL_FONT)
@@ -535,7 +547,7 @@ def _(
 
         # ── Precompute trajectories ────────────────────────────────────────────────────
 
-        ts = np.linspace(-T, 0, 1000)
+        ts = np.linspace(-T, 0.5, 1000)
         tt = ts + T
 
         # x_r1 = np.array([clR12.x(t) for t in ts])
@@ -549,27 +561,394 @@ def _(
         # d_rr = np.array([clRR.d(t) for t in ts])
         # # om = np.array([omega(t) for t in ts])
 
-        x_r1 = np.array([clR1.x(t) for t in ts])
-        x_r2 = np.array([clR2.x(t) for t in ts])
+        x_r1 = np.array([clRboth.x(t) for t in ts])
+        # x_r1 = np.array([clR1.x(t) for t in ts])
+        # x_r2 = np.array([clR2.x(t) for t in ts])
         x_rr = np.array([clRR.x(t) for t in ts])
-        u_r1 = np.array([clR1.u(t) for t in ts])
-        u_r2 = np.array([clR2.u(t) for t in ts])
+        u_r1 = np.array([clRboth.u(t) for t in ts])
+        # u_r2 = np.array([clR2.u(t) for t in ts])
         u_rr = np.array([clRR.u(t) for t in ts])
-        d_r1 = np.array([clR1.d(t) for t in ts])
-        d_r2 = np.array([clR2.d(t) for t in ts])
+        d_r1 = np.array([clRboth.d(t) for t in ts])
+        # d_r2 = np.array([clR2.d(t) for t in ts])
         d_rr = np.array([clRR.d(t) for t in ts])
         # om = np.array([omega(t) for t in ts])
 
         # ── Figure ─────────────────────────────────────────────────────────────────────
 
 
-        fig, axs = plt.subplots(2, 2, figsize=(8, 7), constrained_layout=True)
+        fig, axs = plt.subplots(1, 2, figsize=(8, 4), constrained_layout=True)
 
         # Left column – compartment concentrations
         compartments = [
-            (0, r"$[\mathbf{X}](\tau)$", r"$[\mathbf{X}](\tau)$", "X", 1.5),
-            (1, r"$[\mathbf{Y}](\tau)$", r"$[\mathbf{Y}](\tau)$", "Y", 1.5),
-            (2, r"$[\mathbf{X-Y}](\tau)$", r"$[\mathbf{X-Y}](\tau)$", "X-Y", 0.5),
+            (0, r"$\mathbf{x}_1(\tau)$", r"$\mathbf{x}_1(\tau)$", "X", 1.7),
+            (1, r"$\mathbf{x}_2(\tau)$", r"$\mathbf{x}_2(\tau)$", "Y", 1.7),
+            # (2, r"$[\mathbf{X-Y}](\tau)$", r"$[\mathbf{X-Y}](\tau)$", "X-Y", 0.5),
+        ]
+        for plti, (i, ylabel, title, ckey, ylim) in enumerate(compartments):
+            if plti < 2:
+                # ax = axs[0, plti]
+                ax = axs[plti]
+            else:
+                ax = axs[1, 0]
+            cf, cp, cr = COLORS[ckey]
+            ax.plot(
+                tt, x_rr[:, i], color=cr, linewidth=LW, linestyle="-", label="RR"
+            )
+            ax.plot(
+                tt, x_r1[:, i], color=cf, linewidth=LW, label="R simultaneous", linestyle="-."
+            )
+            # ax.plot(
+            #     tt, x_r2[:, i], color=cp, linewidth=LW, label="R2", linestyle="-.", 
+            # )
+            style_ax(ax, ylabel, title, ylim=(-0.1, ylim + 0.1))
+
+        # axs[0].axhline(
+        #     y=l1_x,
+        #     linestyle="--",
+        #     color="#1F6FCB",
+        #     linewidth=LW,
+        #     label="Therap. Thresh. 1",
+        # )
+        # axs[0].legend(ncol=1, fontsize=LEGEND_FONT, loc="upper left")
+        # axs[1].axhline(
+        #     y=l2_x,
+        #     linestyle="--",
+        #     color="#27AE60",
+        #     linewidth=LW,
+        #     label="Therap. Thresh. 2",
+        # )
+        # axs[1].legend(fontsize=LEGEND_FONT)
+    
+        axs[0].axhline(
+            y=l1_x,
+            linestyle="--",
+            color="#1F6FCB",
+            linewidth=LW,
+            label="Therap. Thresh. 1",
+        )
+        axs[0].legend(ncol=1, fontsize=LEGEND_FONT, loc="upper left")
+        axs[1].axhline(
+            y=l2_x,
+            linestyle="--",
+            color="#27AE60",
+            linewidth=LW,
+            label="Therap. Thresh. 2",
+        )
+        axs[1].legend(fontsize=LEGEND_FONT, loc="upper left")
+        # axs[1, 0].legend(fontsize=LEGEND_FONT)
+
+        # field = np.asarray(field_map[field_name.value])
+        # x_coords = np.asarray(grid.coordinate_vectors[0])
+        # y_coords = np.asarray(grid.coordinate_vectors[1])
+        # z_coords = np.asarray(grid.coordinate_vectors[2])
+        # z_index = int(np.argmin(np.abs(z_coords)))
+        # z_value = float(z_coords[z_index])
+
+        # t_index = 100
+        # value_2d = VRR[t_index, :, :, z_index]
+        # title = (
+        #     r"$V_{RR}\left([\mathbf{X}], [\mathbf{Y}], [\mathbf{X-Y}]=0, t=-3\right)$"
+        # )
+        # print("t=",times[t_index])
+    
+        # X, Y = np.meshgrid(x_coords, y_coords, indexing="ij")
+        # vmax = float(np.max(np.abs(value_2d)))
+
+        # ax = axs[1, 1]
+        # if vmax > 0.0:
+        #     norm = mcolors.TwoSlopeNorm(vmin=-vmax, vcenter=0.0, vmax=vmax)
+        #     contour = ax.contourf(X, Y, -value_2d, levels=31, cmap="RdBu", norm=norm)
+        #     cbar_ticks = [-vmax, vmax]
+        # else:
+        #     contour = ax.contourf(X, Y, -value_2d, levels=31, cmap="RdBu")
+        #     cbar_ticks = [value_2d.min(), value_2d.max()]
+
+        # print(cbar_ticks)
+    
+        # # ax.contour(X, Y, -value_2d, levels=[0], colors="black", linewidths=2.0)
+        # ax.set_xlabel(r"$\mathbf{x}_1$")
+        # ax.set_ylabel(r"$\mathbf{x}_2$")
+        # ax.set_title(title)
+    
+        # cbar = fig.colorbar(contour, ax=ax, label=r"$V_{RR}$", ticks=cbar_ticks)
+        # cbar = fig.colorbar(contour, ax=ax, ticks=[0])
+        # cbar = fig.colorbar(contour, ax=ax, label=r"$V_{RR}$", ticks=[0.15, 0.5])
+        # from matplotlib.ticker import FormatStrFormatter
+        # cbar.ax.yaxis.set_major_formatter(FormatStrFormatter("%.1f"))
+        # cbar.set_label(r"$V_{RR}$", rotation=0, labelpad=-25)
+        # cbar.ax.yaxis.set_label_coords(3.0, 0.5)  # x, y in axes coords
+
+    _()
+    plt.savefig("rr2.pdf")
+    plt.show()
+    return
+
+
+@app.cell
+def _(T, clRR, clRboth, l1_x, l2_x, np, plt):
+    # Three version
+    def _():
+
+        time_var = r"$\tau$"
+
+        # ── Helpers ────────────────────────────────────────────────────────────────────
+
+        # def omega(t):
+        #     S1, S2 = W_start - T, W_end - T
+        #     return np.clip(1.0 - (t - S1) / (S2 - S1), 0.0, 1.0)
+
+        def style_ax(ax, ylabel, title, xlim=(0, T + 0.5), ylim=None):
+            ax.set_xlabel(time_var, fontsize=LABEL_FONT)
+            ax.set_ylabel(ylabel, fontsize=LABEL_FONT)
+            ax.set_title(title, fontsize=LABEL_FONT)
+            ax.set_xlim(xlim)
+            if ylim is not None:
+                ax.set_ylim(ylim)
+
+        # ── Style & constants ──────────────────────────────────────────────────────────
+
+        plt.rcParams.update(
+            {
+                "axes.spines.top": False,
+                "axes.spines.right": False,
+                "axes.grid": True,
+                "grid.alpha": 0.25,
+                "grid.linestyle": "--",
+                "font.size": 11,
+            }
+        )
+
+        LEGEND_FONT = 11
+        LABEL_FONT = 14
+        LW = 2.5
+
+        # (full-course color, partial-course color) per compartment
+        COLORS = {
+            "X": ("black", "black", "lightblue"),
+            "Y": ("black", "black", "lightblue"),
+            "X-Y": ("black", "black", "lightblue"),
+        }
+        GREY = "#888888"
+
+        # ── Precompute trajectories ────────────────────────────────────────────────────
+
+        ts = np.linspace(-T, 0.5, 1000)
+        tt = ts + T
+
+        # x_r1 = np.array([clR12.x(t) for t in ts])
+        # x_r2 = np.array([clR21.x(t) for t in ts])
+        # x_rr = np.array([clRR.x(t) for t in ts])
+        # u_r1 = np.array([clR12.u(t) for t in ts])
+        # u_r2 = np.array([clR21.u(t) for t in ts])
+        # u_rr = np.array([clRR.u(t) for t in ts])
+        # d_r1 = np.array([clR12.d(t) for t in ts])
+        # d_r2 = np.array([clR21.d(t) for t in ts])
+        # d_rr = np.array([clRR.d(t) for t in ts])
+        # # om = np.array([omega(t) for t in ts])
+
+        x_r1 = np.array([clRboth.x(t) for t in ts])
+        # x_r1 = np.array([clR1.x(t) for t in ts])
+        # x_r2 = np.array([clR2.x(t) for t in ts])
+        x_rr = np.array([clRR.x(t) for t in ts])
+        u_r1 = np.array([clRboth.u(t) for t in ts])
+        # u_r2 = np.array([clR2.u(t) for t in ts])
+        u_rr = np.array([clRR.u(t) for t in ts])
+        d_r1 = np.array([clRboth.d(t) for t in ts])
+        # d_r2 = np.array([clR2.d(t) for t in ts])
+        d_rr = np.array([clRR.d(t) for t in ts])
+        # om = np.array([omega(t) for t in ts])
+
+        # ── Figure ─────────────────────────────────────────────────────────────────────
+
+
+        fig, axs = plt.subplots(1, 3, figsize=(10, 4), constrained_layout=True)
+
+        # Left column – compartment concentrations
+        compartments = [
+            (0, r"$\mathbf{x}_1(\tau)$", r"$\mathbf{x}_1(\tau)$", "X", 1.5),
+            (1, r"$\mathbf{x}_2(\tau)$", r"$\mathbf{x}_2(\tau)$", "Y", 1.5),
+            (2, r"$\mathbf{x}_3(\tau)$", r"$\mathbf{x}_3(\tau)$", "X-Y", 1.),
+        ]
+        for plti, (i, ylabel, title, ckey, ylim) in enumerate(compartments):
+            ax = axs[plti]
+            cf, cp, cr = COLORS[ckey]
+            ax.plot(
+                tt, x_rr[:, i], color=cr, linewidth=LW, linestyle="-", label="RR"
+            )
+            ax.plot(
+                tt, x_r1[:, i], color=cf, linewidth=LW, label="R simultaneous", linestyle="-."
+            )
+            # ax.plot(
+            #     tt, x_r2[:, i], color=cp, linewidth=LW, label="R2", linestyle="-.", 
+            # )
+            style_ax(ax, ylabel, title, ylim=(-0.1, ylim + 0.1))
+
+        # axs[0].axhline(
+        #     y=l1_x,
+        #     linestyle="--",
+        #     color="#1F6FCB",
+        #     linewidth=LW,
+        #     label="Therap. Thresh. 1",
+        # )
+        # axs[0].legend(ncol=1, fontsize=LEGEND_FONT, loc="upper left")
+        # axs[1].axhline(
+        #     y=l2_x,
+        #     linestyle="--",
+        #     color="#27AE60",
+        #     linewidth=LW,
+        #     label="Therap. Thresh. 2",
+        # )
+        # axs[1].legend(fontsize=LEGEND_FONT)
+    
+        axs[0].axhline(
+            y=l1_x,
+            linestyle="--",
+            color="#1F6FCB",
+            linewidth=LW,
+            label="Therap. Thresh. 1",
+        )
+        axs[0].legend(ncol=1, fontsize=LEGEND_FONT, loc="upper left")
+        axs[1].axhline(
+            y=l2_x,
+            linestyle="--",
+            color="#27AE60",
+            linewidth=LW,
+            label="Therap. Thresh. 2",
+        )
+        axs[1].legend(fontsize=LEGEND_FONT, loc="upper left")
+        axs[2].legend(fontsize=LEGEND_FONT, loc="upper left")
+
+        # field = np.asarray(field_map[field_name.value])
+        # x_coords = np.asarray(grid.coordinate_vectors[0])
+        # y_coords = np.asarray(grid.coordinate_vectors[1])
+        # z_coords = np.asarray(grid.coordinate_vectors[2])
+        # z_index = int(np.argmin(np.abs(z_coords)))
+        # z_value = float(z_coords[z_index])
+
+        # t_index = 100
+        # value_2d = VRR[t_index, :, :, z_index]
+        # title = (
+        #     r"$V_{RR}\left([\mathbf{X}], [\mathbf{Y}], [\mathbf{X-Y}]=0, t=-3\right)$"
+        # )
+        # print("t=",times[t_index])
+    
+        # X, Y = np.meshgrid(x_coords, y_coords, indexing="ij")
+        # vmax = float(np.max(np.abs(value_2d)))
+
+        # ax = axs[1, 1]
+        # if vmax > 0.0:
+        #     norm = mcolors.TwoSlopeNorm(vmin=-vmax, vcenter=0.0, vmax=vmax)
+        #     contour = ax.contourf(X, Y, -value_2d, levels=31, cmap="RdBu", norm=norm)
+        #     cbar_ticks = [-vmax, vmax]
+        # else:
+        #     contour = ax.contourf(X, Y, -value_2d, levels=31, cmap="RdBu")
+        #     cbar_ticks = [value_2d.min(), value_2d.max()]
+
+        # print(cbar_ticks)
+    
+        # # ax.contour(X, Y, -value_2d, levels=[0], colors="black", linewidths=2.0)
+        # ax.set_xlabel(r"$\mathbf{x}_1$")
+        # ax.set_ylabel(r"$\mathbf{x}_2$")
+        # ax.set_title(title)
+    
+        # cbar = fig.colorbar(contour, ax=ax, label=r"$V_{RR}$", ticks=cbar_ticks)
+        # cbar = fig.colorbar(contour, ax=ax, ticks=[0])
+        # cbar = fig.colorbar(contour, ax=ax, label=r"$V_{RR}$", ticks=[0.15, 0.5])
+        # from matplotlib.ticker import FormatStrFormatter
+        # cbar.ax.yaxis.set_major_formatter(FormatStrFormatter("%.1f"))
+        # cbar.set_label(r"$V_{RR}$", rotation=0, labelpad=-25)
+        # cbar.ax.yaxis.set_label_coords(3.0, 0.5)  # x, y in axes coords
+
+    _()
+    plt.savefig("rr3.pdf")
+    plt.show()
+    return
+
+
+@app.cell
+def _(T, clRR, clRboth, l1_x, l2_x, np, plt):
+    # Square version
+    def _():
+
+        time_var = r"$\tau$"
+
+        # ── Helpers ────────────────────────────────────────────────────────────────────
+
+        # def omega(t):
+        #     S1, S2 = W_start - T, W_end - T
+        #     return np.clip(1.0 - (t - S1) / (S2 - S1), 0.0, 1.0)
+
+        def style_ax(ax, ylabel, title, xlim=(0, T + 0.5), ylim=None):
+            ax.set_xlabel(time_var, fontsize=LABEL_FONT)
+            ax.set_ylabel(ylabel, fontsize=LABEL_FONT)
+            ax.set_title(title, fontsize=LABEL_FONT)
+            ax.set_xlim(xlim)
+            if ylim is not None:
+                ax.set_ylim(ylim)
+
+        # ── Style & constants ──────────────────────────────────────────────────────────
+
+        plt.rcParams.update(
+            {
+                "axes.spines.top": False,
+                "axes.spines.right": False,
+                "axes.grid": True,
+                "grid.alpha": 0.25,
+                "grid.linestyle": "--",
+                "font.size": 11,
+            }
+        )
+
+        LEGEND_FONT = 11
+        LABEL_FONT = 14
+        LW = 2.5
+
+        # (full-course color, partial-course color) per compartment
+        COLORS = {
+            "X": ("black", "black", "lightblue"),
+            "Y": ("black", "black", "lightblue"),
+            "X-Y": ("black", "black", "lightblue"),
+        }
+        GREY = "#888888"
+
+        # ── Precompute trajectories ────────────────────────────────────────────────────
+
+        ts = np.linspace(-T, 0.5, 1000)
+        tt = ts + T
+
+        # x_r1 = np.array([clR12.x(t) for t in ts])
+        # x_r2 = np.array([clR21.x(t) for t in ts])
+        # x_rr = np.array([clRR.x(t) for t in ts])
+        # u_r1 = np.array([clR12.u(t) for t in ts])
+        # u_r2 = np.array([clR21.u(t) for t in ts])
+        # u_rr = np.array([clRR.u(t) for t in ts])
+        # d_r1 = np.array([clR12.d(t) for t in ts])
+        # d_r2 = np.array([clR21.d(t) for t in ts])
+        # d_rr = np.array([clRR.d(t) for t in ts])
+        # # om = np.array([omega(t) for t in ts])
+
+        x_r1 = np.array([clRboth.x(t) for t in ts])
+        # x_r1 = np.array([clR1.x(t) for t in ts])
+        # x_r2 = np.array([clR2.x(t) for t in ts])
+        x_rr = np.array([clRR.x(t) for t in ts])
+        u_r1 = np.array([clRboth.u(t) for t in ts])
+        # u_r2 = np.array([clR2.u(t) for t in ts])
+        u_rr = np.array([clRR.u(t) for t in ts])
+        d_r1 = np.array([clRboth.d(t) for t in ts])
+        # d_r2 = np.array([clR2.d(t) for t in ts])
+        d_rr = np.array([clRR.d(t) for t in ts])
+        # om = np.array([omega(t) for t in ts])
+
+        # ── Figure ─────────────────────────────────────────────────────────────────────
+
+
+        fig, axs = plt.subplots(2, 2, figsize=(8, 5), constrained_layout=True)
+
+        # Left column – compartment concentrations
+        compartments = [
+            (0, r"$\mathbf{x}_1(\tau)$", r"$\mathbf{x}_1(\tau)$", "X", 2.5),
+            (1, r"$\mathbf{x}_2(\tau)$", r"$\mathbf{x}_2(\tau)$", "Y", 2.5),
+            (2, r"$\mathbf{x}_3(\tau)$", r"$\mathbf{x}_3(\tau)$", "X-Y", 1.5),
         ]
         for plti, (i, ylabel, title, ckey, ylim) in enumerate(compartments):
             if plti < 2:
@@ -581,74 +960,111 @@ def _(
                 tt, x_rr[:, i], color=cr, linewidth=LW, linestyle="-", label="RR"
             )
             ax.plot(
-                tt, x_r1[:, i], color=cf, linewidth=LW, label="R1", linestyle=":"
+                tt, x_r1[:, i], color=cf, linewidth=LW, label="R simultaneous", linestyle="-."
             )
-            ax.plot(
-                tt, x_r2[:, i], color=cp, linewidth=LW, label="R2", linestyle="-.", 
-            )
+            # ax.plot(
+            #     tt, x_r2[:, i], color=cp, linewidth=LW, label="R2", linestyle="-.", 
+            # )
             style_ax(ax, ylabel, title, ylim=(-0.1, ylim + 0.1))
 
-        axs[0, 0].legend(ncol=1, fontsize=LEGEND_FONT, loc="upper left")
+        # axs[0, 0].axhline(
+        #     y=l1_x,
+        #     linestyle="--",
+        #     color="#1F6FCB",
+        #     linewidth=LW,
+        #     label="Therap. Thresh. 1",
+        # )
+        # axs[0, 0].legend(ncol=1, fontsize=LEGEND_FONT, loc="upper left")
+        # axs[0, 1].axhline(
+        #     y=l2_x,
+        #     linestyle="--",
+        #     color="#27AE60",
+        #     linewidth=LW,
+        #     label="Therap. Thresh. 2",
+        # )
+        # axs[0, 1].legend(fontsize=LEGEND_FONT)
+    
         axs[0, 0].axhline(
             y=l1_x,
             linestyle="--",
             color="#1F6FCB",
             linewidth=LW,
-            label="Thera. Thresh 1",
+            label="Therap. Thresh. 1",
         )
-        axs[0, 1].legend(fontsize=LEGEND_FONT)
+        axs[0, 0].legend(ncol=1, fontsize=LEGEND_FONT, loc="upper left")
         axs[0, 1].axhline(
             y=l2_x,
             linestyle="--",
             color="#27AE60",
             linewidth=LW,
-            label="Thera. Thresh 2",
+            label="Therap. Thresh. 2",
         )
-        axs[1, 0].legend(fontsize=LEGEND_FONT)
+        axs[0, 1].legend(fontsize=LEGEND_FONT, loc="upper left")
+        axs[1, 0].legend(fontsize=LEGEND_FONT, loc="upper left")
 
-        field = np.asarray(field_map[field_name.value])
-        x_coords = np.asarray(grid.coordinate_vectors[0])
-        y_coords = np.asarray(grid.coordinate_vectors[1])
-        z_coords = np.asarray(grid.coordinate_vectors[2])
-        z_index = int(np.argmin(np.abs(z_coords)))
-        z_value = float(z_coords[z_index])
+        # field = np.asarray(field_map[field_name.value])
+        # x_coords = np.asarray(grid.coordinate_vectors[0])
+        # y_coords = np.asarray(grid.coordinate_vectors[1])
+        # z_coords = np.asarray(grid.coordinate_vectors[2])
+        # z_index = int(np.argmin(np.abs(z_coords)))
+        # z_value = float(z_coords[z_index])
 
-        t_index = 100
-        value_2d = VRR[t_index, :, :, z_index]
-        title = (
-            r"$V_{RR}\left([\mathbf{X}], [\mathbf{Y}], [\mathbf{X-Y}]=0, t=-3\right)$"
-        )
-        print("t=",times[t_index])
+        # t_index = 100
+        # value_2d = VRR[t_index, :, :, z_index]
+        # title = (
+        #     r"$V_{RR}\left([\mathbf{X}], [\mathbf{Y}], [\mathbf{X-Y}]=0, t=-3\right)$"
+        # )
+        # print("t=",times[t_index])
     
-        X, Y = np.meshgrid(x_coords, y_coords, indexing="ij")
-        vmax = float(np.max(np.abs(value_2d)))
+        # X, Y = np.meshgrid(x_coords, y_coords, indexing="ij")
+        # vmax = float(np.max(np.abs(value_2d)))
 
-        ax = axs[1, 1]
-        if vmax > 0.0:
-            norm = mcolors.TwoSlopeNorm(vmin=-vmax, vcenter=0.0, vmax=vmax)
-            contour = ax.contourf(X, Y, -value_2d, levels=31, cmap="RdBu", norm=norm)
-            cbar_ticks = [-vmax, vmax]
-        else:
-            contour = ax.contourf(X, Y, -value_2d, levels=31, cmap="RdBu")
-            cbar_ticks = [value_2d.min(), value_2d.max()]
+        # ax = axs[1, 1]
+        # if vmax > 0.0:
+        #     norm = mcolors.TwoSlopeNorm(vmin=-vmax, vcenter=0.0, vmax=vmax)
+        #     contour = ax.contourf(X, Y, -value_2d, levels=31, cmap="RdBu", norm=norm)
+        #     cbar_ticks = [-vmax, vmax]
+        # else:
+        #     contour = ax.contourf(X, Y, -value_2d, levels=31, cmap="RdBu")
+        #     cbar_ticks = [value_2d.min(), value_2d.max()]
 
-        print(cbar_ticks)
+        # print(cbar_ticks)
     
-        # ax.contour(X, Y, -value_2d, levels=[0], colors="black", linewidths=2.0)
-        ax.set_xlabel(r"$[\mathbf{X}]$")
-        ax.set_ylabel(r"$[\mathbf{Y}]$")
-        ax.set_title(title)
+        # # ax.contour(X, Y, -value_2d, levels=[0], colors="black", linewidths=2.0)
+        # ax.set_xlabel(r"$\mathbf{x}_1$")
+        # ax.set_ylabel(r"$\mathbf{x}_2$")
+        # ax.set_title(title)
     
         # cbar = fig.colorbar(contour, ax=ax, label=r"$V_{RR}$", ticks=cbar_ticks)
         # cbar = fig.colorbar(contour, ax=ax, ticks=[0])
-        cbar = fig.colorbar(contour, ax=ax, label=r"$V_{RR}$", ticks=[0.15, 0.5])
-        from matplotlib.ticker import FormatStrFormatter
-        cbar.ax.yaxis.set_major_formatter(FormatStrFormatter("%.1f"))
-        cbar.set_label(r"$V_{RR}$", rotation=0, labelpad=-25)
-        cbar.ax.yaxis.set_label_coords(3.0, 0.5)  # x, y in axes coords
+        # cbar = fig.colorbar(contour, ax=ax, label=r"$V_{RR}$", ticks=[0.15, 0.5])
+        # from matplotlib.ticker import FormatStrFormatter
+        # cbar.ax.yaxis.set_major_formatter(FormatStrFormatter("%.1f"))
+        # cbar.set_label(r"$V_{RR}$", rotation=0, labelpad=-25)
+        # cbar.ax.yaxis.set_label_coords(3.0, 0.5)  # x, y in axes coords
+
+        # Right column (row 2) – worst-case unmodeled dynamics
+        for i, (ckey, ylabel, title) in enumerate(
+            zip(
+                ["X"],
+                [""],
+                [
+                    "Optimal Inputs",
+                ],
+            )
+        ):
+            ax = axs[i + 1, 1]
+            cf, cp, cr = COLORS[ckey]
+            ax.plot(tt, u_rr[:, i], color=cr, linewidth=LW, linestyle=":", label=r"$\mathbf{u}_1$" + " RR")
+            ax.plot(tt, u_r1[:, i], color=cf, linewidth=LW, linestyle=":", label=r"$\mathbf{u}_1$" + " R simultaneous")
+            ax.plot(tt, d_rr[:, i], color=cr, linewidth=LW, linestyle="-", label=r"$\mathbf{d}_1$" + " RR")
+            ax.plot(tt, d_r1[:, i], color=cf, linewidth=LW, linestyle="-", label=r"$\mathbf{d}_1$" + " R simultaneous")
+
+            style_ax(ax, ylabel, title, ylim=(-0.1, 10.))
+            axs[1, 1].legend(fontsize=LEGEND_FONT, loc="upper left")
 
     _()
-    plt.savefig("rr.pdf")
+    plt.savefig("rr4.pdf")
     plt.show()
     return
 
