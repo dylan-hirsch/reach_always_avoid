@@ -23,8 +23,8 @@ def _():
 
     plt.rcParams["text.usetex"] = False
     plt.rcParams["mathtext.fontset"] = "cm"
-    plt.rcParams['pdf.fonttype'] = 42   # TrueType
-    plt.rcParams['ps.fonttype'] = 42
+    plt.rcParams["pdf.fonttype"] = 42  # TrueType
+    plt.rcParams["ps.fonttype"] = 42
     font = {"size": 12}
     plt.rc("font", **font)
     return auc, closed_loop, hj, jnp, mo, np, plt
@@ -339,7 +339,7 @@ def _(T, W_end, W_start, clRA, clRAA, clRA_cons, g_z, l_x, np, plt):
                 color=cp,
                 linewidth=LW,
                 linestyle="-.",
-                label="RA (Partial course)",
+                label="RA (early stop)",
             )
             ax.plot(
                 tt,
@@ -357,7 +357,7 @@ def _(T, W_end, W_start, clRA, clRAA, clRA_cons, g_z, l_x, np, plt):
             linestyle="--",
             color="red",
             linewidth=LW,
-            label="Toxic Thresh.",
+            label=r"Toxic Thresh. $\theta_{\mathrm{toxic}}$",
         )
         axs[1, 0].legend(fontsize=LEGEND_FONT)
         axs[2, 0].axhline(
@@ -365,7 +365,7 @@ def _(T, W_end, W_start, clRA, clRAA, clRA_cons, g_z, l_x, np, plt):
             linestyle="--",
             color="#27AE60",
             linewidth=LW,
-            label="Therap. Thresh.",
+            label=r"Therap. Thresh. $\theta_{\mathrm{ther}}$",
         )
         axs[2, 0].legend(fontsize=LEGEND_FONT)
 
@@ -374,7 +374,7 @@ def _(T, W_end, W_start, clRA, clRAA, clRA_cons, g_z, l_x, np, plt):
             (
                 0,
                 1,
-                r"$\omega(\tau)\,\mathbf{u}^*(\tau)$",
+                r"$\mathbf{M}(\tau)\,\mathbf{u}^*(\tau)$",
                 "Dosing Rate (IV)",
                 "blood",
             ),
@@ -409,7 +409,7 @@ def _(T, W_end, W_start, clRA, clRAA, clRA_cons, g_z, l_x, np, plt):
                 color=GREY,
                 linewidth=LW,
                 linestyle="--",
-                label=rf"$\omega$",
+                label=r"$\mathbf{M}$",
             )
             style_ax(ax, ylabel, title)
             ax.legend(fontsize=LEGEND_FONT + 3)

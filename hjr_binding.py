@@ -200,10 +200,19 @@ def _(grid, hj, jnp, l1, l2, model, set_plot_fields, times):
             l2,
         )
 
-        Vboth = hj.solve(hj.SolverSettings.with_accuracy("very_high", value_postprocessor=lambda t, v: vppR(t, v, jnp.maximum(l1, l2))), 
-                      model, grid, times, jnp.maximum(l1, l2))
+        Vboth = hj.solve(
+            hj.SolverSettings.with_accuracy(
+                "very_high",
+                value_postprocessor=lambda t, v: vppR(t, v, jnp.maximum(l1, l2)),
+            ),
+            model,
+            grid,
+            times,
+            jnp.maximum(l1, l2),
+        )
 
         return V1, V2, Vboth
+
 
     VR1, VR2, Vboth = _()
     set_plot_fields(lambda fields: {**fields, "VR1": VR1, "VR2": VR2})
@@ -219,12 +228,23 @@ def _(grid, hj, jnp, l1, l2, model, set_plot_fields, times):
             return jnp.minimum(v, l)
 
         # specify the accuracy with which to solve the HJ Partial Differential Equation
-        solver_settings = hj.SolverSettings.with_accuracy("very_high", value_postprocessor=lambda t, v: vppR(t, v, l1))
+        solver_settings = hj.SolverSettings.with_accuracy(
+            "very_high", value_postprocessor=lambda t, v: vppR(t, v, l1)
+        )
 
-        Vboth = hj.solve(hj.SolverSettings.with_accuracy("very_high", value_postprocessor=lambda t, v: vppR(t, v, jnp.maximum(l1, l2))), 
-                      model, grid, times, jnp.maximum(l1, l2))
+        Vboth = hj.solve(
+            hj.SolverSettings.with_accuracy(
+                "very_high",
+                value_postprocessor=lambda t, v: vppR(t, v, jnp.maximum(l1, l2)),
+            ),
+            model,
+            grid,
+            times,
+            jnp.maximum(l1, l2),
+        )
 
         return Vboth
+
 
     VRboth = _()
     set_plot_fields(lambda fields: {**fields, "VRboth": VRboth})
@@ -281,10 +301,22 @@ def _(V12, V21, VR1, VR2, VRboth, closed_loop, grid, model, times):
         model, grid, times, VR2, dummyV, initial_state=[0.0, 0.0, 0.0], steps=100
     )
     clRboth = closed_loop.ClosedLoopTrajectory(
-        model, grid, times, VRboth, dummyV, initial_state=[0., 0., 0.], steps=100
+        model,
+        grid,
+        times,
+        VRboth,
+        dummyV,
+        initial_state=[0.0, 0.0, 0.0],
+        steps=100,
     )
     clRboth = closed_loop.ClosedLoopTrajectory(
-        model, grid, times, VRboth, dummyV, initial_state=[0., 0., 0.], steps=100
+        model,
+        grid,
+        times,
+        VRboth,
+        dummyV,
+        initial_state=[0.0, 0.0, 0.0],
+        steps=100,
     )
 
     clR12 = closed_loop.ClosedLoopTrajectory(
@@ -631,8 +663,8 @@ def _(T, clRR, clRboth, l1_x, l2_x, np, plt):
 
         # Left column – compartment concentrations
         compartments = [
-            (0, r"$\mathbf{x}_1(\tau)$", r"$\mathbf{x}_1(\tau)$", "X", 1.7),
-            (1, r"$\mathbf{x}_2(\tau)$", r"$\mathbf{x}_2(\tau)$", "Y", 1.7),
+            (0, r"$\mathbf{x}_1(\tau)$", r"Concentration of $\mathrm{X}_1$", "X", 1.7),
+            (1, r"$\mathbf{x}_2(\tau)$", r"Concentration of $\mathrm{X}_2$", "Y", 1.7),
             # (2, r"$[\mathbf{X-Y}](\tau)$", r"$[\mathbf{X-Y}](\tau)$", "X-Y", 0.5),
         ]
         for plti, (i, ylabel, title, ckey, ylim) in enumerate(compartments):
@@ -646,10 +678,15 @@ def _(T, clRR, clRboth, l1_x, l2_x, np, plt):
                 tt, x_rr[:, i], color=cr, linewidth=LW, linestyle="-", label="RR"
             )
             ax.plot(
-                tt, x_r1[:, i], color=cf, linewidth=LW, label="R simultaneous", linestyle="-."
+                tt,
+                x_r1[:, i],
+                color=cf,
+                linewidth=LW,
+                label="R simultaneous",
+                linestyle="-.",
             )
             # ax.plot(
-            #     tt, x_r2[:, i], color=cp, linewidth=LW, label="R2", linestyle="-.", 
+            #     tt, x_r2[:, i], color=cp, linewidth=LW, label="R2", linestyle="-.",
             # )
             style_ax(ax, ylabel, title, ylim=(-0.1, ylim + 0.1))
 
@@ -669,13 +706,13 @@ def _(T, clRR, clRboth, l1_x, l2_x, np, plt):
         #     label="Therap. Thresh. 2",
         # )
         # axs[1].legend(fontsize=LEGEND_FONT)
-    
+
         axs[0].axhline(
             y=l1_x,
             linestyle="--",
             color="#1F6FCB",
             linewidth=LW,
-            label="Therap. Thresh. 1",
+            label=r"Therap. Thresh. $\theta_\mathrm{ther,1}$",
         )
         axs[0].legend(ncol=1, fontsize=LEGEND_FONT, loc="upper left")
         axs[1].axhline(
@@ -683,7 +720,7 @@ def _(T, clRR, clRboth, l1_x, l2_x, np, plt):
             linestyle="--",
             color="#27AE60",
             linewidth=LW,
-            label="Therap. Thresh. 2",
+            label=r"Therap. Thresh. $\theta_\mathrm{ther,2}$",
         )
         axs[1].legend(fontsize=LEGEND_FONT, loc="upper left")
         # axs[1, 0].legend(fontsize=LEGEND_FONT)
@@ -701,7 +738,7 @@ def _(T, clRR, clRboth, l1_x, l2_x, np, plt):
         #     r"$V_{RR}\left([\mathbf{X}], [\mathbf{Y}], [\mathbf{X-Y}]=0, t=-3\right)$"
         # )
         # print("t=",times[t_index])
-    
+
         # X, Y = np.meshgrid(x_coords, y_coords, indexing="ij")
         # vmax = float(np.max(np.abs(value_2d)))
 
@@ -715,12 +752,12 @@ def _(T, clRR, clRboth, l1_x, l2_x, np, plt):
         #     cbar_ticks = [value_2d.min(), value_2d.max()]
 
         # print(cbar_ticks)
-    
+
         # # ax.contour(X, Y, -value_2d, levels=[0], colors="black", linewidths=2.0)
         # ax.set_xlabel(r"$\mathbf{x}_1$")
         # ax.set_ylabel(r"$\mathbf{x}_2$")
         # ax.set_title(title)
-    
+
         # cbar = fig.colorbar(contour, ax=ax, label=r"$V_{RR}$", ticks=cbar_ticks)
         # cbar = fig.colorbar(contour, ax=ax, ticks=[0])
         # cbar = fig.colorbar(contour, ax=ax, label=r"$V_{RR}$", ticks=[0.15, 0.5])
@@ -729,8 +766,9 @@ def _(T, clRR, clRboth, l1_x, l2_x, np, plt):
         # cbar.set_label(r"$V_{RR}$", rotation=0, labelpad=-25)
         # cbar.ax.yaxis.set_label_coords(3.0, 0.5)  # x, y in axes coords
 
+
     _()
-    plt.savefig("rr2.pdf")
+    plt.savefig("/Users/dylanhirsch/Desktop/rr2.pdf")
     plt.show()
     return
 
@@ -811,14 +849,13 @@ def _(T, clRR, clRboth, l1_x, l2_x, np, plt):
 
         # ── Figure ─────────────────────────────────────────────────────────────────────
 
-
         fig, axs = plt.subplots(1, 3, figsize=(10, 4), constrained_layout=True)
 
         # Left column – compartment concentrations
         compartments = [
             (0, r"$\mathbf{x}_1(\tau)$", r"$\mathbf{x}_1(\tau)$", "X", 1.5),
             (1, r"$\mathbf{x}_2(\tau)$", r"$\mathbf{x}_2(\tau)$", "Y", 1.5),
-            (2, r"$\mathbf{x}_3(\tau)$", r"$\mathbf{x}_3(\tau)$", "X-Y", 1.),
+            (2, r"$\mathbf{x}_3(\tau)$", r"$\mathbf{x}_3(\tau)$", "X-Y", 1.0),
         ]
         for plti, (i, ylabel, title, ckey, ylim) in enumerate(compartments):
             ax = axs[plti]
@@ -827,10 +864,15 @@ def _(T, clRR, clRboth, l1_x, l2_x, np, plt):
                 tt, x_rr[:, i], color=cr, linewidth=LW, linestyle="-", label="RR"
             )
             ax.plot(
-                tt, x_r1[:, i], color=cf, linewidth=LW, label="R simultaneous", linestyle="-."
+                tt,
+                x_r1[:, i],
+                color=cf,
+                linewidth=LW,
+                label="R simultaneous",
+                linestyle="-.",
             )
             # ax.plot(
-            #     tt, x_r2[:, i], color=cp, linewidth=LW, label="R2", linestyle="-.", 
+            #     tt, x_r2[:, i], color=cp, linewidth=LW, label="R2", linestyle="-.",
             # )
             style_ax(ax, ylabel, title, ylim=(-0.1, ylim + 0.1))
 
@@ -850,7 +892,7 @@ def _(T, clRR, clRboth, l1_x, l2_x, np, plt):
         #     label="Therap. Thresh. 2",
         # )
         # axs[1].legend(fontsize=LEGEND_FONT)
-    
+
         axs[0].axhline(
             y=l1_x,
             linestyle="--",
@@ -882,7 +924,7 @@ def _(T, clRR, clRboth, l1_x, l2_x, np, plt):
         #     r"$V_{RR}\left([\mathbf{X}], [\mathbf{Y}], [\mathbf{X-Y}]=0, t=-3\right)$"
         # )
         # print("t=",times[t_index])
-    
+
         # X, Y = np.meshgrid(x_coords, y_coords, indexing="ij")
         # vmax = float(np.max(np.abs(value_2d)))
 
@@ -896,12 +938,12 @@ def _(T, clRR, clRboth, l1_x, l2_x, np, plt):
         #     cbar_ticks = [value_2d.min(), value_2d.max()]
 
         # print(cbar_ticks)
-    
+
         # # ax.contour(X, Y, -value_2d, levels=[0], colors="black", linewidths=2.0)
         # ax.set_xlabel(r"$\mathbf{x}_1$")
         # ax.set_ylabel(r"$\mathbf{x}_2$")
         # ax.set_title(title)
-    
+
         # cbar = fig.colorbar(contour, ax=ax, label=r"$V_{RR}$", ticks=cbar_ticks)
         # cbar = fig.colorbar(contour, ax=ax, ticks=[0])
         # cbar = fig.colorbar(contour, ax=ax, label=r"$V_{RR}$", ticks=[0.15, 0.5])
@@ -909,6 +951,7 @@ def _(T, clRR, clRboth, l1_x, l2_x, np, plt):
         # cbar.ax.yaxis.set_major_formatter(FormatStrFormatter("%.1f"))
         # cbar.set_label(r"$V_{RR}$", rotation=0, labelpad=-25)
         # cbar.ax.yaxis.set_label_coords(3.0, 0.5)  # x, y in axes coords
+
 
     _()
     plt.savefig("rr3.pdf")
@@ -992,7 +1035,6 @@ def _(T, clRR, clRboth, l1_x, l2_x, np, plt):
 
         # ── Figure ─────────────────────────────────────────────────────────────────────
 
-
         fig, axs = plt.subplots(2, 2, figsize=(8, 5), constrained_layout=True)
 
         # Left column – compartment concentrations
@@ -1011,10 +1053,15 @@ def _(T, clRR, clRboth, l1_x, l2_x, np, plt):
                 tt, x_rr[:, i], color=cr, linewidth=LW, linestyle="-", label="RR"
             )
             ax.plot(
-                tt, x_r1[:, i], color=cf, linewidth=LW, label="R simultaneous", linestyle="-."
+                tt,
+                x_r1[:, i],
+                color=cf,
+                linewidth=LW,
+                label="R simultaneous",
+                linestyle="-.",
             )
             # ax.plot(
-            #     tt, x_r2[:, i], color=cp, linewidth=LW, label="R2", linestyle="-.", 
+            #     tt, x_r2[:, i], color=cp, linewidth=LW, label="R2", linestyle="-.",
             # )
             style_ax(ax, ylabel, title, ylim=(-0.1, ylim + 0.1))
 
@@ -1034,13 +1081,13 @@ def _(T, clRR, clRboth, l1_x, l2_x, np, plt):
         #     label="Therap. Thresh. 2",
         # )
         # axs[0, 1].legend(fontsize=LEGEND_FONT)
-    
+
         axs[0, 0].axhline(
             y=l1_x,
             linestyle="--",
             color="#1F6FCB",
             linewidth=LW,
-            label="Therap. Thresh. 1",
+            label=r"Therap. Thresh. \theta_{\mathrm{ther}, 1}",
         )
         axs[0, 0].legend(ncol=1, fontsize=LEGEND_FONT, loc="upper left")
         axs[0, 1].axhline(
@@ -1048,7 +1095,7 @@ def _(T, clRR, clRboth, l1_x, l2_x, np, plt):
             linestyle="--",
             color="#27AE60",
             linewidth=LW,
-            label="Therap. Thresh. 2",
+            label=r"Therap. Thresh. \theta_{\mathrm{ther}, 2}",
         )
         axs[0, 1].legend(fontsize=LEGEND_FONT, loc="upper left")
         axs[1, 0].legend(fontsize=LEGEND_FONT, loc="upper left")
@@ -1066,7 +1113,7 @@ def _(T, clRR, clRboth, l1_x, l2_x, np, plt):
         #     r"$V_{RR}\left([\mathbf{X}], [\mathbf{Y}], [\mathbf{X-Y}]=0, t=-3\right)$"
         # )
         # print("t=",times[t_index])
-    
+
         # X, Y = np.meshgrid(x_coords, y_coords, indexing="ij")
         # vmax = float(np.max(np.abs(value_2d)))
 
@@ -1080,12 +1127,12 @@ def _(T, clRR, clRboth, l1_x, l2_x, np, plt):
         #     cbar_ticks = [value_2d.min(), value_2d.max()]
 
         # print(cbar_ticks)
-    
+
         # # ax.contour(X, Y, -value_2d, levels=[0], colors="black", linewidths=2.0)
         # ax.set_xlabel(r"$\mathbf{x}_1$")
         # ax.set_ylabel(r"$\mathbf{x}_2$")
         # ax.set_title(title)
-    
+
         # cbar = fig.colorbar(contour, ax=ax, label=r"$V_{RR}$", ticks=cbar_ticks)
         # cbar = fig.colorbar(contour, ax=ax, ticks=[0])
         # cbar = fig.colorbar(contour, ax=ax, label=r"$V_{RR}$", ticks=[0.15, 0.5])
@@ -1106,13 +1153,42 @@ def _(T, clRR, clRboth, l1_x, l2_x, np, plt):
         ):
             ax = axs[i + 1, 1]
             cf, cp, cr = COLORS[ckey]
-            ax.plot(tt, u_rr[:, i], color=cr, linewidth=LW, linestyle=":", label=r"$\mathbf{u}_1$" + " RR")
-            ax.plot(tt, u_r1[:, i], color=cf, linewidth=LW, linestyle=":", label=r"$\mathbf{u}_1$" + " R simultaneous")
-            ax.plot(tt, d_rr[:, i], color=cr, linewidth=LW, linestyle="-", label=r"$\mathbf{d}_1$" + " RR")
-            ax.plot(tt, d_r1[:, i], color=cf, linewidth=LW, linestyle="-", label=r"$\mathbf{d}_1$" + " R simultaneous")
+            ax.plot(
+                tt,
+                u_rr[:, i],
+                color=cr,
+                linewidth=LW,
+                linestyle=":",
+                label=r"$\mathbf{u}_1$" + " RR",
+            )
+            ax.plot(
+                tt,
+                u_r1[:, i],
+                color=cf,
+                linewidth=LW,
+                linestyle=":",
+                label=r"$\mathbf{u}_1$" + " R simultaneous",
+            )
+            ax.plot(
+                tt,
+                d_rr[:, i],
+                color=cr,
+                linewidth=LW,
+                linestyle="-",
+                label=r"$\mathbf{d}_1$" + " RR",
+            )
+            ax.plot(
+                tt,
+                d_r1[:, i],
+                color=cf,
+                linewidth=LW,
+                linestyle="-",
+                label=r"$\mathbf{d}_1$" + " R simultaneous",
+            )
 
-            style_ax(ax, ylabel, title, ylim=(-0.1, 10.))
+            style_ax(ax, ylabel, title, ylim=(-0.1, 10.0))
             axs[1, 1].legend(fontsize=LEGEND_FONT, loc="upper left")
+
 
     _()
     plt.savefig("rr4.pdf")
