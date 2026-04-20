@@ -18,6 +18,7 @@ figures/
 scratch/
 .conda-env/
 .conda-pkgs/
+*.swp
 
 # Virtual environments
 .venv
