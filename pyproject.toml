@@ -5,11 +5,16 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "emoji>=2.15.0",
     "hj-reachability>=0.7.0",
     "jax>=0.9.2",
     "marimo>=0.21.1",
     "matplotlib>=3.10.8",
     "numpy>=2.4.3",
+    "pillow>=11.0.0",
+    # Provides the `AppKit` import on macOS. The PyPI project named `AppKit`
+    # is unrelated and must not be installed.
+    "pyobjc-framework-cocoa>=11.1; sys_platform == 'darwin'",
     "ruff>=0.15.8",
     "scipy>=1.17.1",
     "tqdm>=4.67.3",
